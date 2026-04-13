@@ -53,10 +53,10 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
         .map(p => ({ name: p.product_name, source: 'history', price: p.last_known_price }));
       results.push(...householdMatches);
 
-      // 2. Search Open Food Facts
+      // 2. Search Open Food Facts (filtered to Australian products)
       try {
         const res = await fetch(
-          `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(debouncedQuery)}&search_simple=1&action=process&json=1&page_size=5&fields=product_name`
+          `https://au.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(debouncedQuery)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name`
         );
         const data = await res.json();
         if (data.products) {
@@ -221,6 +221,7 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
               Photo Product
             </button>
           </div>
+
           {/* Suggestions list - fills remaining space */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
             {loadingSuggestions && (
@@ -267,7 +268,7 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{s.name}</div>
                       {s.source === 'history' && (
                         <div style={{ fontSize: 13, color: 'var(--green-400)', fontWeight: 600, marginTop: 2 }}>
-                          Previously bought {s.price ? `\u00b7 $${s.price.toFixed(2)}` : ''}
+                          Previously bought {s.price ? `Â· $${s.price.toFixed(2)}` : ''}
                         </div>
                       )}
                     </div>
