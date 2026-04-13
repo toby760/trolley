@@ -9,40 +9,36 @@ export default function PinLogin() {
   const [householdData, setHouseholdData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const inputRefs = useRef([]);
+  const hiddenInputRef = useRef(null);
 
+  // Use a single hidden input to capture all digits — this is the most
+  // reliable way to get the mobile keyboard to appear on page load.
+  // The autoFocus attribute on the hidden input triggers the keyboard
+  // on the initial page render (before any user gesture).
   useEffect(() => {
-    // Auto-focus first input immediately + retry for mobile keyboards
-    const el = inputRefs.current[0];
+    // Multiple retry attempts for stubborn mobile browsers
+    const el = hiddenInputRef.current;
     if (el) {
       el.focus();
-      // Retry after a tick for mobile browsers that need it
-      requestAnimationFrame(() => el.focus());
+      // Retry a few times for browsers that need a tick
+      const t1 = setTimeout(() => el.focus(), 100);
+      const t2 = setTimeout(() => el.focus(), 300);
+      const t3 = setTimeout(() => el.focus(), 600);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
   }, []);
 
-  const handleDigit = (index, value) => {
-    if (value.length > 1) value = value.slice(-1);
-    if (value && !/^\d$/.test(value)) return;
-
-    const newPin = [...pin];
-    newPin[index] = value;
+  const handleHiddenInput = (e) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+    const digits = value.split('');
+    const newPin = ['', '', '', ''];
+    digits.forEach((d, i) => { newPin[i] = d; });
     setPin(newPin);
     setError('');
 
-    if (value && index < 3) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
     // Auto-submit when all 4 digits entered
-    if (value && index === 3 && newPin.every(d => d)) {
-      handlePinSubmit(newPin.join(''));
-    }
-  };
-
-  const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !pin[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    if (digits.length === 4) {
+      handlePinSubmit(value);
     }
   };
 
@@ -56,9 +52,17 @@ export default function PinLogin() {
     } catch (err) {
       setError('Could not connect. Check your PIN.');
       setPin(['', '', '', '']);
-      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      if (hiddenInputRef.current) {
+        hiddenInputRef.current.value = '';
+        setTimeout(() => hiddenInputRef.current?.focus(), 100);
+      }
     }
     setLoading(false);
+  };
+
+  // Tap anywhere on PIN area to re-focus the hidden input
+  const focusHiddenInput = () => {
+    hiddenInputRef.current?.focus();
   };
 
   const handleUserSelect = (user) => {
@@ -68,19 +72,12 @@ export default function PinLogin() {
   if (step === 'user') {
     return (
       <div style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 32
+        height: '100%', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', padding: 32
       }}>
         <TrolleyLogo size={80} />
         <h1 style={{
-          fontSize: 28,
-          fontWeight: 900,
-          marginTop: 20,
-          marginBottom: 8,
+          fontSize: 28, fontWeight: 900, marginTop: 20, marginBottom: 8,
           color: 'var(--green-400)'
         }}>Who's shopping?</h1>
         <p style={{ color: 'var(--gray-300)', marginBottom: 40, fontSize: 15 }}>
@@ -91,28 +88,16 @@ export default function PinLogin() {
             onClick={() => handleUserSelect('T')}
             className="btn btn-full"
             style={{
-              flex: 1,
-              padding: '24px 16px',
-              background: '#5B8DEF',
-              borderRadius: 'var(--radius-lg)',
-              fontSize: 20,
-              fontWeight: 800,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 8
+              flex: 1, padding: '24px 16px', background: '#5B8DEF',
+              borderRadius: 'var(--radius-lg)', fontSize: 20, fontWeight: 800,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8
             }}
           >
             <span style={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 28,
-              fontWeight: 900
+              width: 56, height: 56, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.2)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              fontSize: 28, fontWeight: 900
             }}>T</span>
             Toby
           </button>
@@ -120,28 +105,16 @@ export default function PinLogin() {
             onClick={() => handleUserSelect('O')}
             className="btn btn-full"
             style={{
-              flex: 1,
-              padding: '24px 16px',
-              background: '#E87CA0',
-              borderRadius: 'var(--radius-lg)',
-              fontSize: 20,
-              fontWeight: 800,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 8
+              flex: 1, padding: '24px 16px', background: '#E87CA0',
+              borderRadius: 'var(--radius-lg)', fontSize: 20, fontWeight: 800,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8
             }}
           >
             <span style={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 28,
-              fontWeight: 900
+              width: 56, height: 56, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.2)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              fontSize: 28, fontWeight: 900
             }}>O</span>
             Orla
           </button>
@@ -151,20 +124,16 @@ export default function PinLogin() {
   }
 
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 32
-    }}>
+    <div
+      style={{
+        height: '100%', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', padding: 32
+      }}
+      onClick={focusHiddenInput}
+    >
       <TrolleyLogo size={80} />
       <h1 style={{
-        fontSize: 28,
-        fontWeight: 900,
-        marginTop: 20,
-        marginBottom: 8,
+        fontSize: 28, fontWeight: 900, marginTop: 20, marginBottom: 8,
         color: 'var(--green-400)'
       }}>Trolley</h1>
       <p style={{ color: 'var(--gray-300)', marginBottom: 8, fontSize: 15 }}>
@@ -174,34 +143,54 @@ export default function PinLogin() {
         First time? Any 4-digit PIN creates a new household
       </p>
 
-      <div className="pin-container">
+      {/* Hidden input that captures all keyboard input */}
+      <input
+        ref={hiddenInputRef}
+        type="tel"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoFocus
+        autoComplete="one-time-code"
+        value={pin.join('')}
+        onChange={handleHiddenInput}
+        style={{
+          position: 'absolute',
+          opacity: 0,
+          width: 1,
+          height: 1,
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          pointerEvents: 'none'
+        }}
+      />
+
+      {/* Visual PIN display boxes */}
+      <div className="pin-container" onClick={focusHiddenInput}>
         {pin.map((digit, i) => (
-          <input
+          <div
             key={i}
-            ref={el => inputRefs.current[i] = el}
-            type="tel"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={1}
             className="pin-digit"
-            value={digit}
-            onChange={e => handleDigit(i, e.target.value)}
-            onKeyDown={e => handleKeyDown(i, e)}
-            autoComplete="off"
-          />
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 28, fontWeight: 900, cursor: 'pointer',
+              borderColor: !digit && pin.join('').length === i
+                ? 'var(--green-400)' : undefined,
+              boxShadow: !digit && pin.join('').length === i
+                ? '0 0 0 2px var(--green-400)' : undefined
+            }}
+          >
+            {digit || ''}
+          </div>
         ))}
       </div>
 
       {error && (
         <p style={{
-          color: 'var(--red-400)',
-          fontSize: 14,
-          fontWeight: 700,
-          marginTop: 8,
-          animation: 'bounceIn 0.3s ease-out'
+          color: 'var(--red-400)', fontSize: 14, fontWeight: 700,
+          marginTop: 8, animation: 'bounceIn 0.3s ease-out'
         }}>{error}</p>
       )}
-
       {loading && (
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
           <div className="spinner" />
