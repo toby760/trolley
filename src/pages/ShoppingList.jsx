@@ -11,35 +11,27 @@ export default function ShoppingList({ onOpenAddItem }) {
   const { aldiItems, woolworthsItems, aldiTotal, woolworthsTotal, toggleItem, deleteItem, updateItem, moveToWoolworths } = useItems();
   const { currentWeek } = useHousehold();
   const [editingItem, setEditingItem] = useState(null);
-  const [showReceipt, setShowReceipt] = useState(null); // 'aldi' | 'woolworths' | null
+  const [showReceipt, setShowReceipt] = useState(null);
   const [finishingAldi, setFinishingAldi] = useState(false);
   const [finishingWoolworths, setFinishingWoolworths] = useState(false);
 
   const handleFinishAldi = async () => {
     setFinishingAldi(true);
-    // Move unchecked Aldi items to Woolworths
     const unchecked = aldiItems.filter(i => i.status === 'active');
     if (unchecked.length > 0) {
       await moveToWoolworths(unchecked.map(i => i.id));
     }
     setFinishingAldi(false);
-    // Prompt receipt scan
     setShowReceipt('aldi');
   };
 
   const handleFinishWoolworths = async () => {
     setFinishingWoolworths(true);
-    // Mark week as complete
     if (currentWeek) {
       await supabase.from('weeks').update({ completed: true }).eq('id', currentWeek.id);
     }
     setFinishingWoolworths(false);
-    // Prompt receipt scan
     setShowReceipt('woolworths');
-  };
-
-  const handleUpdatePrice = async (itemId, newPrice) => {
-    await updateItem(itemId, { estimated_price: newPrice });
   };
 
   const aldiActive = aldiItems.filter(i => i.status === 'active');
@@ -54,53 +46,51 @@ export default function ShoppingList({ onOpenAddItem }) {
       </div>
 
       {/* Aldi section */}
-      <div className="store-section">
+      <div className="store-card">
         <div className="store-header">
-          <div className="store-name">
-            <span className="store-badge aldi">ALDI</span>
-            <span style={{ fontSize: 14, color: 'var(--gray-300)' }}>
+          <div className="store-header-left">
+            <span className="store-name-badge aldi">ALDI</span>
+            <span className="store-item-count">
               {aldiItems.length} item{aldiItems.length !== 1 ? 's' : ''}
             </span>
           </div>
           <div className="store-total">${aldiTotal.toFixed(2)}</div>
         </div>
 
-        {aldiActive.map(item => (
-          <ShoppingItem
-            key={item.id}
-            item={item}
-            onToggle={toggleItem}
-            onDelete={deleteItem}
-            onEdit={setEditingItem}
-            onUpdatePrice={handleUpdatePrice}
-          />
-        ))}
-
-        {aldiDone.length > 0 && (
-          <>
-            <div style={{
-              fontSize: 12, fontWeight: 700, color: 'var(--gray-400)',
-              padding: '8px 0', textTransform: 'uppercase', letterSpacing: 0.5
-            }}>
-              Done ({aldiDone.length})
-            </div>
-            {aldiDone.map(item => (
+        {aldiActive.length > 0 && (
+          <div className="store-items-list">
+            {aldiActive.map(item => (
               <ShoppingItem
                 key={item.id}
                 item={item}
                 onToggle={toggleItem}
                 onDelete={deleteItem}
                 onEdit={setEditingItem}
-            onUpdatePrice={handleUpdatePrice}
               />
             ))}
+          </div>
+        )}
+
+        {aldiDone.length > 0 && (
+          <>
+            <div className="store-done-label">Done ({aldiDone.length})</div>
+            <div className="store-items-list">
+              {aldiDone.map(item => (
+                <ShoppingItem
+                  key={item.id}
+                  item={item}
+                  onToggle={toggleItem}
+                  onDelete={deleteItem}
+                  onEdit={setEditingItem}
+                />
+              ))}
+            </div>
           </>
         )}
 
         {aldiItems.length > 0 && (
           <button
-            className="btn btn-aldi btn-full"
-            style={{ marginTop: 12 }}
+            className="btn-finish aldi"
             onClick={handleFinishAldi}
             disabled={finishingAldi}
           >
@@ -109,61 +99,59 @@ export default function ShoppingList({ onOpenAddItem }) {
         )}
 
         {aldiItems.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>
-            <p style={{ fontWeight: 700, fontSize: 15 }}>No Aldi items yet</p>
-            <p style={{ fontSize: 13, marginTop: 4 }}>Add items and choose Aldi as the store</p>
+          <div className="store-empty">
+            <div className="store-empty-title">No Aldi items yet</div>
+            <div className="store-empty-sub">Add items and choose Aldi as the store</div>
           </div>
         )}
       </div>
 
       {/* Woolworths section */}
-      <div className="store-section">
+      <div className="store-card">
         <div className="store-header">
-          <div className="store-name">
-            <span className="store-badge woolworths">WOOLWORTHS</span>
-            <span style={{ fontSize: 14, color: 'var(--gray-300)' }}>
+          <div className="store-header-left">
+            <span className="store-name-badge woolworths">WOOLWORTHS</span>
+            <span className="store-item-count">
               {woolworthsItems.length} item{woolworthsItems.length !== 1 ? 's' : ''}
             </span>
           </div>
           <div className="store-total">${woolworthsTotal.toFixed(2)}</div>
         </div>
 
-        {woolActive.map(item => (
-          <ShoppingItem
-            key={item.id}
-            item={item}
-            onToggle={toggleItem}
-            onDelete={deleteItem}
-            onEdit={setEditingItem}
-            onUpdatePrice={handleUpdatePrice}
-          />
-        ))}
-
-        {woolDone.length > 0 && (
-          <>
-            <div style={{
-              fontSize: 12, fontWeight: 700, color: 'var(--gray-400)',
-              padding: '8px 0', textTransform: 'uppercase', letterSpacing: 0.5
-            }}>
-              Done ({woolDone.length})
-            </div>
-            {woolDone.map(item => (
+        {woolActive.length > 0 && (
+          <div className="store-items-list">
+            {woolActive.map(item => (
               <ShoppingItem
                 key={item.id}
                 item={item}
                 onToggle={toggleItem}
                 onDelete={deleteItem}
                 onEdit={setEditingItem}
-            onUpdatePrice={handleUpdatePrice}
               />
             ))}
+          </div>
+        )}
+
+        {woolDone.length > 0 && (
+          <>
+            <div className="store-done-label">Done ({woolDone.length})</div>
+            <div className="store-items-list">
+              {woolDone.map(item => (
+                <ShoppingItem
+                  key={item.id}
+                  item={item}
+                  onToggle={toggleItem}
+                  onDelete={deleteItem}
+                  onEdit={setEditingItem}
+                />
+              ))}
+            </div>
           </>
         )}
 
         {woolworthsItems.length > 0 && (
           <button
-            className="btn btn-woolworths btn-full"
-            style={{ marginTop: 12 }}
+            className="btn-finish woolworths"
             onClick={handleFinishWoolworths}
             disabled={finishingWoolworths}
           >
@@ -172,16 +160,16 @@ export default function ShoppingList({ onOpenAddItem }) {
         )}
 
         {woolworthsItems.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>
-            <p style={{ fontWeight: 700, fontSize: 15 }}>No Woolworths items yet</p>
-            <p style={{ fontSize: 13, marginTop: 4 }}>Add items and choose Woolworths as the store</p>
+          <div className="store-empty">
+            <div className="store-empty-title">No Woolworths items yet</div>
+            <div className="store-empty-sub">Add items and choose Woolworths as the store</div>
           </div>
         )}
       </div>
 
       {/* FAB */}
       <button className="fab" onClick={onOpenAddItem}>
-        <IconPlus size={28} />
+        <IconPlus size={26} />
       </button>
 
       {/* Edit modal */}
