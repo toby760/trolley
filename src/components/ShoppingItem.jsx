@@ -1,20 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { IconCheck, IconTrash, IconEdit } from '../lib/icons';
 
 export default function ShoppingItem({ item, onToggle, onDelete, onEdit }) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const isDone = item.status === 'done';
-
-  const handleDelete = () => {
-    if (confirmDelete) {
-      onDelete(item.id);
-      setConfirmDelete(false);
-    } else {
-      setConfirmDelete(true);
-      // Auto-reset after 3 seconds
-      setTimeout(() => setConfirmDelete(false), 3000);
-    }
-  };
 
   return (
     <div style={{
@@ -113,16 +101,16 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit }) {
           <IconEdit size={18} />
         </button>
 
-        {/* Delete (trash) */}
+        {/* Delete (trash) - deletes immediately */}
         <button
-          onClick={handleDelete}
+          onClick={() => onDelete(item.id)}
           style={{
             width: 38,
             height: 38,
             borderRadius: 10,
             border: 'none',
-            background: confirmDelete ? 'var(--red-500)' : 'rgba(239,68,68,0.15)',
-            color: confirmDelete ? 'white' : '#fca5a5',
+            background: 'rgba(239,68,68,0.15)',
+            color: '#fca5a5',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -130,13 +118,9 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit }) {
             padding: 0,
             transition: 'all 0.15s',
           }}
-          aria-label={confirmDelete ? 'Confirm delete' : 'Delete item'}
+          aria-label="Delete item"
         >
-          {confirmDelete ? (
-            <IconCheck size={18} />
-          ) : (
-            <IconTrash size={18} />
-          )}
+          <IconTrash size={18} />
         </button>
       </div>
     </div>
