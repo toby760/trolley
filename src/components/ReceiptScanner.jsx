@@ -22,13 +22,44 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
     setResult(null);
 
     try {
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('eng');
-      const { data: { text } } = await worker.recognize(file);
-      await worker.terminate();
+      // Convert file to base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
-      // Parse receipt text
-      const parsed = parseReceipt(text, store);
+      // Call Gemini via our serverless API
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, mode: 'receipt', store })
+      });
+
+      if (!res.ok) {
+        throw new Error('API error');
+      }
+
+      const data = await res.json();
+      // data = { items: [{ item_name, price, quantity }], total }
+
+      if (!data.items || !Array.isArray(data.items)) {
+        throw new Error('Invalid response');
+      }
+
+      // Normalise items to match expected format
+      const items = data.items.map(item => ({
+        name: item.item_name || item.name || 'Unknown item',
+        price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+        quantity: item.quantity || 1
+      }));
+
+      const total = typeof data.total === 'number'
+        ? data.total
+        : items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+
+      const parsed = { items, total };
       setResult(parsed);
 
       // Save to Supabase
@@ -39,7 +70,7 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
           store: store,
           total: parsed.total,
           items_json: parsed.items,
-          raw_ocr_text: text
+          raw_ocr_text: JSON.stringify(data)
         });
 
         // Update week actual spend
@@ -49,9 +80,9 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
           .update({ [field]: parsed.total })
           .eq('id', currentWeek.id);
 
-        // Update price memory for recognised items
+        // Update price memory for every item
         for (const item of parsed.items) {
-          if (item.name && item.price) {
+          if (item.name && item.price > 0) {
             await supabase.from('price_memory').upsert({
               household_id: household.id,
               product_name: item.name,
@@ -66,8 +97,8 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
         }
       }
     } catch (e) {
-      console.error('Receipt OCR error:', e);
-      setError('Failed to read receipt. Try taking a clearer photo.');
+      console.error('Receipt scan error:', e);
+      setError('Failed to read receipt. Try taking a clearer photo with good lighting.');
     }
     setProcessing(false);
   };
@@ -86,7 +117,7 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
         </div>
 
         <p style={{ color: 'var(--gray-300)', marginBottom: 16, fontSize: 14 }}>
-          {store === 'aldi' ? 'Aldi' : 'Woolworths'} receipt — take a photo or choose from gallery
+          {store === 'aldi' ? 'Aldi' : 'Woolworths'} receipt — snap a photo and Gemini AI will read every item
         </p>
 
         {!result && !processing && (
@@ -135,8 +166,10 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
         {processing && (
           <div style={{ textAlign: 'center', padding: 32 }}>
             <div className="spinner" style={{ margin: '0 auto 16px' }} />
-            <p style={{ fontWeight: 700 }}>Reading your receipt...</p>
-            <p style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 4 }}>This may take a moment</p>
+            <p style={{ fontWeight: 700 }}>Gemini is reading your receipt...</p>
+            <p style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 4 }}>
+              Identifying every item and price
+            </p>
           </div>
         )}
 
@@ -164,14 +197,28 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
               padding: 16,
               marginBottom: 16
             }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-300)', marginBottom: 8 }}>
-                Receipt Total
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--green-300)' }}>
-                ${result.total.toFixed(2)}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 4 }}>
-                {result.items.length} items detected
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-300)', marginBottom: 8 }}>
+                    Receipt Total
+                  </div>
+                  <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--green-300)' }}>
+                    ${result.total.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 4 }}>
+                    {result.items.length} items detected
+                  </div>
+                </div>
+                <div style={{
+                  background: 'var(--green-600)',
+                  borderRadius: 12,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--green-200)'
+                }}>
+                  AI PARSED
+                </div>
               </div>
             </div>
 
@@ -181,13 +228,21 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
                   <div key={i} style={{
                     display: 'flex',
                     justifyContent: 'space-between',
+                    alignItems: 'center',
                     padding: '8px 0',
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
                     fontSize: 14
                   }}>
-                    <span style={{ fontWeight: 600 }}>{item.name}</span>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{item.name}</span>
+                      {item.quantity > 1 && (
+                        <span style={{ color: 'var(--gray-400)', fontSize: 12, marginLeft: 6 }}>
+                          x{item.quantity}
+                        </span>
+                      )}
+                    </div>
                     <span style={{ fontWeight: 700, color: 'var(--green-300)' }}>
-                      ${item.price.toFixed(2)}
+                      ${(item.price * item.quantity).toFixed(2)}
                     </span>
                   </div>
                 ))}
@@ -205,41 +260,4 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
       </div>
     </div>
   );
-}
-
-// Simple receipt parser
-function parseReceipt(text, store) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  const items = [];
-  let total = 0;
-
-  // Look for price patterns like "Item Name    $4.50" or "Item Name    4.50"
-  const priceRegex = /^(.+?)\s+\$?(\d+\.\d{2})\s*$/;
-  const totalRegex = /(?:total|subtotal|amount|due)\s*:?\s*\$?(\d+\.\d{2})/i;
-
-  for (const line of lines) {
-    // Check for total
-    const totalMatch = line.match(totalRegex);
-    if (totalMatch) {
-      total = parseFloat(totalMatch[1]);
-      continue;
-    }
-
-    // Check for item + price
-    const itemMatch = line.match(priceRegex);
-    if (itemMatch) {
-      const name = itemMatch[1].replace(/[^a-zA-Z0-9\s'-]/g, '').trim();
-      const price = parseFloat(itemMatch[2]);
-      if (name.length > 1 && price > 0 && price < 200) {
-        items.push({ name, price });
-      }
-    }
-  }
-
-  // If no total found, sum items
-  if (total === 0 && items.length > 0) {
-    total = items.reduce((sum, i) => sum + i.price, 0);
-  }
-
-  return { items, total, rawText: text };
 }
