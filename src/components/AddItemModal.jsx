@@ -104,154 +104,375 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-sheet">
-        <div className="modal-handle" />
-
-        {step === 'search' ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h2 className="modal-title" style={{ margin: 0 }}>Add Item</h2>
-              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--gray-300)', cursor: 'pointer', padding: 8 }}>
-                <IconX size={24} />
-              </button>
-            </div>
-
-            <div style={{ position: 'relative' }}>
-              <div style={{ position: 'relative' }}>
-                <IconSearch size={20} style={{
-                  position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
-                  color: 'var(--gray-400)', pointerEvents: 'none'
-                }} />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  className="input"
-                  style={{ paddingLeft: 42 }}
-                  placeholder="What do you need?"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  autoComplete="off"
-                  autoCapitalize="words"
-                />
-              </div>
-
-              {suggestions.length > 0 && (
-                <div className="autocomplete-dropdown">
-                  {suggestions.map((s, i) => (
-                    <div
-                      key={i}
-                      className="autocomplete-item"
-                      onClick={() => selectProduct(s.name)}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
-                        {s.source === 'history' && (
-                          <div style={{ fontSize: 12, color: 'var(--green-400)', fontWeight: 600 }}>
-                            Previously bought {s.price ? `· $${s.price.toFixed(2)}` : ''}
-                          </div>
-                        )}
-                      </div>
-                      {s.source === 'history' && (
-                        <span style={{ fontSize: 11, color: 'var(--green-400)', fontWeight: 700 }}>HISTORY</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{
-              display: 'flex', gap: 12, marginTop: 16
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'var(--green-900)',
+      zIndex: 200,
+      display: 'flex',
+      flexDirection: 'column',
+      animation: 'fadeIn 0.2s ease-out'
+    }}>
+      {step === 'search' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Top bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            paddingTop: 'calc(16px + env(safe-area-inset-top))',
+            borderBottom: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Add Item</h2>
+            <button onClick={onClose} style={{
+              background: 'var(--green-700)',
+              border: 'none',
+              color: 'var(--white)',
+              cursor: 'pointer',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}>
-              <button
-                className="btn btn-secondary"
-                style={{ flex: 1 }}
-                onClick={() => { onClose(); onOpenScanner?.(); }}
-              >
-                <IconBarcode size={20} />
-                Scan Barcode
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{ flex: 1 }}
-                onClick={() => { onClose(); onOpenCamera?.(); }}
-              >
-                <IconCamera size={20} />
-                Photo
-              </button>
-            </div>
+              <IconX size={22} />
+            </button>
+          </div>
 
+          {/* Search input */}
+          <div style={{ padding: '16px 20px 0' }}>
+            <div style={{ position: 'relative' }}>
+              <IconSearch size={20} style={{
+                position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+                color: 'var(--gray-400)', pointerEvents: 'none'
+              }} />
+              <input
+                ref={inputRef}
+                type="text"
+                className="input"
+                style={{
+                  paddingLeft: 46,
+                  fontSize: 18,
+                  height: 56,
+                  borderRadius: 16,
+                  background: 'var(--green-800)',
+                  border: '2px solid var(--green-600)'
+                }}
+                placeholder="What do you need?"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                autoComplete="off"
+                autoCapitalize="words"
+              />
+            </div>
+          </div>
+
+          {/* Scan / Photo buttons - prominent */}
+          <div style={{ display: 'flex', gap: 12, padding: '16px 20px' }}>
+            <button
+              onClick={() => { onClose(); onOpenScanner?.(); }}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                padding: '16px 12px',
+                background: 'var(--green-800)',
+                border: '2px solid var(--green-600)',
+                borderRadius: 16,
+                color: 'var(--green-300)',
+                fontFamily: 'Nunito, sans-serif',
+                fontWeight: 800,
+                fontSize: 14,
+                cursor: 'pointer',
+                minHeight: 80
+              }}
+            >
+              <IconBarcode size={28} />
+              Scan Barcode
+            </button>
+            <button
+              onClick={() => { onClose(); onOpenCamera?.(); }}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                padding: '16px 12px',
+                background: 'var(--green-800)',
+                border: '2px solid var(--green-600)',
+                borderRadius: 16,
+                color: 'var(--green-300)',
+                fontFamily: 'Nunito, sans-serif',
+                fontWeight: 800,
+                fontSize: 14,
+                cursor: 'pointer',
+                minHeight: 80
+              }}
+            >
+              <IconCamera size={28} />
+              Photo Label
+            </button>
+          </div>
+
+          {/* Suggestions list - fills remaining space */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
             {loadingSuggestions && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-                <div className="spinner" style={{ width: 24, height: 24 }} />
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+                <div className="spinner" style={{ width: 28, height: 28 }} />
               </div>
             )}
-          </>
-        ) : (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <h2 className="modal-title" style={{ margin: 0 }}>Where to buy?</h2>
-              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--gray-300)', cursor: 'pointer', padding: 8 }}>
-                <IconX size={24} />
-              </button>
-            </div>
 
-            <div style={{
+            {suggestions.length > 0 && (
+              <div style={{ marginTop: 4 }}>
+                <div style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: 'var(--gray-400)',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  marginBottom: 8,
+                  paddingLeft: 4
+                }}>
+                  Suggestions
+                </div>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => selectProduct(s.name)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '16px',
+                      marginBottom: 8,
+                      background: 'var(--green-800)',
+                      border: s.source === 'history' ? '1px solid var(--green-600)' : '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: 14,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      color: 'var(--white)',
+                      fontFamily: 'Nunito, sans-serif',
+                      minHeight: 56
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{s.name}</div>
+                      {s.source === 'history' && (
+                        <div style={{ fontSize: 13, color: 'var(--green-400)', fontWeight: 600, marginTop: 2 }}>
+                          Previously bought {s.price ? `Â· $${s.price.toFixed(2)}` : ''}
+                        </div>
+                      )}
+                    </div>
+                    {s.source === 'history' && (
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: 'var(--green-400)',
+                        background: 'rgba(79,212,142,0.12)',
+                        padding: '4px 8px',
+                        borderRadius: 8
+                      }}>
+                        HISTORY
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!loadingSuggestions && suggestions.length === 0 && query.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                padding: '32px 20px',
+                color: 'var(--gray-400)'
+              }}>
+                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>&#128269;</div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Type to search</div>
+                <div style={{ fontSize: 14, marginTop: 4, color: 'var(--gray-500)' }}>
+                  Or scan a barcode / photo a label
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* STORE PICKER - step 2 */
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Top bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            paddingTop: 'calc(16px + env(safe-area-inset-top))',
+            borderBottom: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Where to buy?</h2>
+            <button onClick={onClose} style={{
               background: 'var(--green-700)',
-              borderRadius: 'var(--radius-md)',
-              padding: '14px 16px',
-              marginBottom: 16,
-              fontSize: 18,
-              fontWeight: 800
+              border: 'none',
+              color: 'var(--white)',
+              cursor: 'pointer',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}>
-              {selectedName}
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--green-300)', marginTop: 4 }}>
+              <IconX size={22} />
+            </button>
+          </div>
+
+          {/* Product info */}
+          <div style={{ padding: '20px 20px 0' }}>
+            <div style={{
+              background: 'var(--green-800)',
+              borderRadius: 16,
+              padding: '20px',
+              border: '1px solid rgba(255,255,255,0.08)'
+            }}>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{selectedName}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--green-400)', marginTop: 6 }}>
                 Est. ${getEstimatedPrice(selectedName, store || 'aldi').toFixed(2)}
               </div>
             </div>
+          </div>
 
-            <div className="store-picker">
-              <button
-                className={`store-picker-btn aldi ${store === 'aldi' ? 'selected' : ''}`}
-                onClick={() => setStore('aldi')}
-              >
-                Aldi
-                {store !== 'aldi' && getSuggestedStore(selectedName) === 'aldi' && (
-                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 4, opacity: 0.7 }}>Suggested</div>
-                )}
-              </button>
-              <button
-                className={`store-picker-btn woolworths ${store === 'woolworths' ? 'selected' : ''}`}
-                onClick={() => setStore('woolworths')}
-              >
-                Woolworths
-                {store !== 'woolworths' && getSuggestedStore(selectedName) === 'woolworths' && (
-                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 4, opacity: 0.7 }}>Suggested</div>
-                )}
-              </button>
-            </div>
-
+          {/* Store buttons - BIG and easy to tap */}
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            padding: '24px 20px',
+            justifyContent: 'center'
+          }}>
             <button
-              className="btn btn-primary btn-full"
-              style={{ marginTop: 8, fontSize: 18 }}
-              onClick={handleAddItem}
-              disabled={!store}
+              onClick={() => setStore('aldi')}
+              style={{
+                width: '100%',
+                padding: '28px 24px',
+                borderRadius: 20,
+                border: store === 'aldi' ? '3px solid #6EAAEF' : '3px solid rgba(0,68,139,0.3)',
+                background: store === 'aldi' ? 'var(--aldi-blue)' : 'rgba(0,68,139,0.15)',
+                color: store === 'aldi' ? 'var(--white)' : '#6EAAEF',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 24,
+                fontWeight: 900,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+                minHeight: 90
+              }}
             >
-              Add to {store === 'aldi' ? 'Aldi' : 'Woolworths'} List
+              ALDI
+              {getSuggestedStore(selectedName) === 'aldi' && (
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: 'rgba(255,255,255,0.15)',
+                  padding: '4px 10px',
+                  borderRadius: 20
+                }}>
+                  Suggested
+                </span>
+              )}
             </button>
 
             <button
-              className="btn btn-secondary btn-full"
-              style={{ marginTop: 8 }}
+              onClick={() => setStore('woolworths')}
+              style={{
+                width: '100%',
+                padding: '28px 24px',
+                borderRadius: 20,
+                border: store === 'woolworths' ? '3px solid #5EDB8A' : '3px solid rgba(0,155,58,0.3)',
+                background: store === 'woolworths' ? 'var(--woolworths-green)' : 'rgba(0,155,58,0.15)',
+                color: store === 'woolworths' ? 'var(--white)' : '#5EDB8A',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 24,
+                fontWeight: 900,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+                minHeight: 90
+              }}
+            >
+              WOOLWORTHS
+              {getSuggestedStore(selectedName) === 'woolworths' && (
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: 'rgba(255,255,255,0.15)',
+                  padding: '4px 10px',
+                  borderRadius: 20
+                }}>
+                  Suggested
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Bottom actions */}
+          <div style={{
+            padding: '0 20px 20px',
+            paddingBottom: 'calc(20px + env(safe-area-inset-bottom))'
+          }}>
+            <button
+              onClick={handleAddItem}
+              disabled={!store}
+              style={{
+                width: '100%',
+                padding: '18px 24px',
+                borderRadius: 16,
+                border: 'none',
+                background: store ? 'var(--green-600)' : 'var(--green-800)',
+                color: store ? 'var(--white)' : 'var(--gray-500)',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 20,
+                fontWeight: 800,
+                cursor: store ? 'pointer' : 'default',
+                transition: 'all 0.15s',
+                minHeight: 60
+              }}
+            >
+              {store ? `Add to ${store === 'aldi' ? 'Aldi' : 'Woolworths'} List` : 'Pick a store above'}
+            </button>
+
+            <button
               onClick={() => { setStep('search'); setSelectedName(''); }}
+              style={{
+                width: '100%',
+                marginTop: 12,
+                padding: '14px',
+                borderRadius: 12,
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'transparent',
+                color: 'var(--gray-300)',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 16,
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
             >
               Back to Search
             </button>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
