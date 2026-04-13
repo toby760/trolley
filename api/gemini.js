@@ -114,11 +114,12 @@ Return ONLY the JSON object. Example:
             const textContent = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!textContent) {
               lastError = { error: 'No response from Gemini', model };
-              break;
+              break; // Don't retry empty responses, try next model
             }
 
             const parsed = JSON.parse(textContent);
 
+            // For product mode, try Open Food Facts text search for extra data
             if (mode === 'product' && parsed.item_name) {
               try {
                 const searchName = parsed.item_name.replace(/\d+[gG]$|\d+[mM][lL]$|\d+[kK][gG]$|\d+[lL]$/, '').trim();
@@ -148,27 +149,31 @@ Return ONLY the JSON object. Example:
             return res.status(200).json(parsed);
           }
 
+          // Non-OK response
           const status = geminiRes.status;
           const errText = await geminiRes.text();
 
+          // Retry on transient errors (429, 503)
           if ((status === 429 || status === 503) && attempt < 1) {
             console.log(`Gemini ${model} returned ${status}, retrying in 1s (attempt ${attempt + 1})...`);
             await new Promise(r => setTimeout(r, 1000));
             continue;
           }
 
+          // Non-retryable or final attempt â store error and try next model
           lastError = { status, details: errText.substring(0, 500), model };
           console.error(`Gemini ${model} error:`, status, errText.substring(0, 200));
-          break;
+          break; // Move to next model
 
         } catch (fetchErr) {
           lastError = { error: fetchErr.message, model };
           console.error(`Gemini ${model} fetch error:`, fetchErr.message);
-          break;
+          break; // Move to next model
         }
       }
     }
 
+    // All models failed
     return res.status(502).json({
       error: 'Gemini API unavailable',
       details: lastError
