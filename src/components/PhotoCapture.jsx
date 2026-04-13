@@ -48,13 +48,23 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+
+    // Cap image at 1280px max dimension to keep payload small
+    const maxDim = 1280;
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    if (w > maxDim || h > maxDim) {
+      const scale = maxDim / Math.max(w, h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(video, 0, 0, w, h);
 
     try {
-      const base64 = canvas.toDataURL('image/jpeg', 0.92);
+      const base64 = canvas.toDataURL('image/jpeg', 0.85);
       stopCamera();
 
       const res = await fetch('/api/gemini', {
@@ -73,6 +83,7 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
           suggested_store: data.suggested_store || '',
           confidence: data.confidence || 'medium',
           category: data.category || '',
+          estimated_price: data.estimated_price_aud || null,
           source: 'gemini-photo'
         });
         onClose();
