@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { IconX, IconBarcode, IconCamera, IconSearch, IconPlus, IconClock } from '../lib/icons';
+import { IconX, IconCamera, IconSearch, IconPlus, IconClock } from '../lib/icons';
 import { useItems } from '../hooks/useItems';
 import { searchGroceryDatabase } from '../lib/groceryData';
 
@@ -13,7 +13,7 @@ function useDebounce(value, delay) {
   return debounced;
 }
 
-export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamera, initialProduct }) {
+export default function AddItemModal({ open, onClose, onOpenCamera, initialProduct }) {
   const { addItem, getSuggestedStore, getEstimatedPrice, priceMemory } = useItems();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -145,25 +145,19 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
             </div>
           </div>
 
-          {/* Smart Add buttons */}
+          {/* Smart Add button */}
           <div className="smart-add-row">
             <button
-              className="smart-add-btn"
-              onClick={() => { onClose(); onOpenScanner?.(); }}
-            >
-              <div className="smart-add-icon">
-                <IconBarcode size={22} />
-              </div>
-              <span>Scan Barcode</span>
-            </button>
-            <button
-              className="smart-add-btn"
-              onClick={() => { onClose(); onOpenCamera?.(); }}
+              className="smart-add-btn smart-add-full"
+              onClick={() => {
+                onClose();
+                onOpenCamera?.();
+              }}
             >
               <div className="smart-add-icon">
                 <IconCamera size={22} />
               </div>
-              <span>Smart Add</span>
+              <span>Smart Add with Camera</span>
             </button>
           </div>
 
@@ -211,7 +205,7 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
                 <div className="empty-icon">ð</div>
                 <div className="empty-title">Search or scan</div>
                 <div className="empty-subtitle">
-                  Type a product name, scan a barcode, or snap a photo
+                  Type a product name or snap a photo with Smart Add
                 </div>
               </div>
             )}
