@@ -20,7 +20,7 @@ function AppContent() {
 
   const handleSplashComplete = useCallback(() => setShowSplash(false), []);
   const openAddItem = useCallback(() => setShowAddItem(true), []);
-  const closeAddItem = useCallback(() => setShowAddItem(false), []);
+  const closeAddItem = useCallback(() => { setShowAddItem(false); setScannedProduct(null); }, []);
 
   const handleProductScanned = useCallback((product) => {
     setScannedProduct(product);
