@@ -3,6 +3,7 @@
 
 export default async function handler(req, res) {
   // Only allow POST
+  // Gemini 2.5 Flash with structured JSON output
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
