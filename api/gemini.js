@@ -108,7 +108,7 @@ Example: {"items": [{"item_name": "Full Cream Milk 2L", "price": 3.29, "quantity
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
       console.error('Gemini API error:', geminiRes.status, errText);
-      return res.status(502).json({ error: 'Gemini API error', status: geminiRes.status });
+      return res.status(502).json({ error: 'Gemini API error', status: geminiRes.status, details: errText.substring(0, 500) });
     }
 
     const geminiData = await geminiRes.json();
