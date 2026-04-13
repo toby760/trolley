@@ -130,10 +130,25 @@ export function useItems() {
     if (!item) return;
 
     const newStatus = item.status === 'done' ? 'active' : 'done';
-    await supabase
+
+    // Optimistic update - instant UI feedback
+    setItems(prev => prev.map(i =>
+      i.id === itemId ? { ...i, status: newStatus } : i
+    ));
+
+    // Then sync to server in background (no await blocking UI)
+    supabase
       .from('items')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', itemId);
+      .eq('id', itemId)
+      .then(({ error }) => {
+        if (error) {
+          // Revert on failure
+          setItems(prev => prev.map(i =>
+            i.id === itemId ? { ...i, status: item.status } : i
+          ));
+        }
+      });
   }, [items]);
 
   const deleteItem = useCallback(async (itemId) => {
