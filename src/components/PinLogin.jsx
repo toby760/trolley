@@ -12,8 +12,13 @@ export default function PinLogin() {
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    // Auto-focus first input
-    setTimeout(() => inputRefs.current[0]?.focus(), 300);
+    // Auto-focus first input immediately + retry for mobile keyboards
+    const el = inputRefs.current[0];
+    if (el) {
+      el.focus();
+      // Retry after a tick for mobile browsers that need it
+      requestAnimationFrame(() => el.focus());
+    }
   }, []);
 
   const handleDigit = (index, value) => {
