@@ -1,134 +1,143 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { IconCheck, IconTrash, IconEdit } from '../lib/icons';
 
 export default function ShoppingItem({ item, onToggle, onDelete, onEdit }) {
-  const [swipeX, setSwipeX] = useState(0);
-  const [showActions, setShowActions] = useState(false);
-  const startX = useRef(0);
-  const startY = useRef(0);
-  const swiping = useRef(false);
-
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isDone = item.status === 'done';
 
-  const handleTouchStart = (e) => {
-    startX.current = e.touches[0].clientX;
-    startY.current = e.touches[0].clientY;
-    swiping.current = false;
-  };
-
-  const handleTouchMove = (e) => {
-    const dx = e.touches[0].clientX - startX.current;
-    const dy = e.touches[0].clientY - startY.current;
-
-    // Only swipe if horizontal movement is dominant
-    if (!swiping.current && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
-      swiping.current = true;
-    }
-
-    if (swiping.current && dx < 0) {
-      setSwipeX(Math.max(dx, -120));
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (swipeX < -60) {
-      setShowActions(true);
-      setSwipeX(-120);
+  const handleDelete = () => {
+    if (confirmDelete) {
+      onDelete(item.id);
+      setConfirmDelete(false);
     } else {
-      setShowActions(false);
-      setSwipeX(0);
-    }
-  };
-
-  const handleTap = () => {
-    if (showActions) {
-      setShowActions(false);
-      setSwipeX(0);
-      return;
-    }
-    if (!swiping.current) {
-      onToggle(item.id);
+      setConfirmDelete(true);
+      // Auto-reset after 3 seconds
+      setTimeout(() => setConfirmDelete(false), 3000);
     }
   };
 
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-md)', marginBottom: 8 }}>
-      {/* Swipe-revealed actions */}
-      <div style={{
-        position: 'absolute',
-        right: 0,
-        top: 0,
-        bottom: 0,
-        display: 'flex',
-        zIndex: 1
-      }}>
-        <button
-          onClick={() => { onEdit(item); setSwipeX(0); setShowActions(false); }}
-          style={{
-            width: 60,
-            background: 'var(--aldi-blue)',
-            border: 'none',
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer'
-          }}
-        >
-          <IconEdit size={20} />
-        </button>
-        <button
-          onClick={() => onDelete(item.id)}
-          style={{
-            width: 60,
-            background: 'var(--red-500)',
-            border: 'none',
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer'
-          }}
-        >
-          <IconTrash size={20} />
-        </button>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      padding: '8px 10px',
+      background: isDone ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
+      borderRadius: 12,
+      marginBottom: 8,
+      minHeight: 56,
+      opacity: isDone ? 0.6 : 1,
+      transition: 'opacity 0.2s, background 0.2s',
+    }}>
+      {/* Tick / Check button */}
+      <button
+        onClick={() => onToggle(item.id)}
+        style={{
+          width: 40,
+          height: 40,
+          minWidth: 40,
+          borderRadius: '50%',
+          border: isDone ? 'none' : '2.5px solid var(--gray-400)',
+          background: isDone ? 'var(--green-500)' : 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          padding: 0,
+          flexShrink: 0,
+        }}
+        aria-label={isDone ? 'Uncheck item' : 'Check item off'}
+      >
+        {isDone && <IconCheck size={20} style={{ color: 'white' }} />}
+      </button>
+
+      {/* Item info - grows to fill space */}
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <div style={{
+          fontSize: 16,
+          fontWeight: 600,
+          color: isDone ? 'var(--gray-400)' : 'var(--gray-50)',
+          textDecoration: isDone ? 'line-through' : 'none',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          transition: 'color 0.2s',
+        }}>
+          {item.name}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <span style={{
+            display: 'inline-block',
+            padding: '1px 6px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 700,
+            background: item.added_by === 'T' ? 'rgba(96,165,250,0.2)' : 'rgba(244,114,182,0.2)',
+            color: item.added_by === 'T' ? '#93bbfc' : '#f9a8d4',
+          }}>
+            {item.added_by}
+          </span>
+          <span style={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: isDone ? 'var(--gray-500)' : 'var(--green-300)',
+            textDecoration: isDone ? 'line-through' : 'none',
+          }}>
+            ${parseFloat(item.estimated_price || 0).toFixed(2)}
+          </span>
+        </div>
       </div>
 
-      {/* Main item */}
-      <div
-        className={`shopping-item ${isDone ? 'done item-done' : ''}`}
-        style={{
-          transform: `translateX(${swipeX}px)`,
-          transition: swiping.current ? 'none' : 'transform 0.3s ease-out',
-          zIndex: 2,
-          position: 'relative'
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onClick={handleTap}
-      >
-        <div className={`item-check ${isDone ? 'checked' : ''}`}>
-          {isDone && <IconCheck size={16} style={{ color: 'white' }} />}
-        </div>
+      {/* Action buttons - always visible */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        {/* Edit (pencil) */}
+        <button
+          onClick={() => onEdit(item)}
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            border: 'none',
+            background: 'rgba(96,165,250,0.15)',
+            color: '#93bbfc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            padding: 0,
+            transition: 'background 0.15s',
+          }}
+          aria-label="Edit item"
+        >
+          <IconEdit size={18} />
+        </button>
 
-        <div className="item-info">
-          <div className="item-name">{item.name}</div>
-          <div className="item-meta">
-            <span className={`user-badge ${item.added_by === 'T' ? 'toby' : 'orla'}`}>
-              {item.added_by}
-            </span>
-            {item.category && item.category !== 'general' && (
-              <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
-                {item.category}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="item-price">
-          ${parseFloat(item.estimated_price || 0).toFixed(2)}
-        </div>
+        {/* Delete (trash) */}
+        <button
+          onClick={handleDelete}
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            border: 'none',
+            background: confirmDelete ? 'var(--red-500)' : 'rgba(239,68,68,0.15)',
+            color: confirmDelete ? 'white' : '#fca5a5',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            padding: 0,
+            transition: 'all 0.15s',
+          }}
+          aria-label={confirmDelete ? 'Confirm delete' : 'Delete item'}
+        >
+          {confirmDelete ? (
+            <IconCheck size={18} />
+          ) : (
+            <IconTrash size={18} />
+          )}
+        </button>
       </div>
     </div>
   );
