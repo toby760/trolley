@@ -158,7 +158,9 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
                   height: 56,
                   borderRadius: 16,
                   background: 'var(--green-800)',
-                  border: '2px solid var(--green-600)'
+                  border: '2px solid var(--green-600)',
+                  color: 'white',
+                  caretColor: 'white'
                 }}
                 placeholder="What do you need?"
                 value={query}
@@ -216,10 +218,9 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
               }}
             >
               <IconCamera size={28} />
-              Photo Label
+              Photo Product
             </button>
           </div>
-
           {/* Suggestions list - fills remaining space */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
             {loadingSuggestions && (
@@ -266,7 +267,7 @@ export default function AddItemModal({ open, onClose, onOpenScanner, onOpenCamer
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{s.name}</div>
                       {s.source === 'history' && (
                         <div style={{ fontSize: 13, color: 'var(--green-400)', fontWeight: 600, marginTop: 2 }}>
-                          Previously bought {s.price ? `Â· $${s.price.toFixed(2)}` : ''}
+                          Previously bought {s.price ? `\u00b7 $${s.price.toFixed(2)}` : ''}
                         </div>
                       )}
                     </div>
