@@ -38,6 +38,10 @@ export default function ShoppingList({ onOpenAddItem }) {
     setShowReceipt('woolworths');
   };
 
+  const handleUpdatePrice = async (itemId, newPrice) => {
+    await updateItem(itemId, { estimated_price: newPrice });
+  };
+
   const aldiActive = aldiItems.filter(i => i.status === 'active');
   const aldiDone = aldiItems.filter(i => i.status === 'done');
   const woolActive = woolworthsItems.filter(i => i.status === 'active');
@@ -68,6 +72,7 @@ export default function ShoppingList({ onOpenAddItem }) {
             onToggle={toggleItem}
             onDelete={deleteItem}
             onEdit={setEditingItem}
+            onUpdatePrice={handleUpdatePrice}
           />
         ))}
 
@@ -86,6 +91,7 @@ export default function ShoppingList({ onOpenAddItem }) {
                 onToggle={toggleItem}
                 onDelete={deleteItem}
                 onEdit={setEditingItem}
+            onUpdatePrice={handleUpdatePrice}
               />
             ))}
           </>
@@ -129,6 +135,7 @@ export default function ShoppingList({ onOpenAddItem }) {
             onToggle={toggleItem}
             onDelete={deleteItem}
             onEdit={setEditingItem}
+            onUpdatePrice={handleUpdatePrice}
           />
         ))}
 
@@ -147,6 +154,7 @@ export default function ShoppingList({ onOpenAddItem }) {
                 onToggle={toggleItem}
                 onDelete={deleteItem}
                 onEdit={setEditingItem}
+            onUpdatePrice={handleUpdatePrice}
               />
             ))}
           </>
