@@ -91,8 +91,8 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
   if (!open) return null;
 
   return (
-    <div className=\"camera-view\">
-      <button className=\"camera-close\" onClick={() => { stopCamera(); onClose(); }}>
+    <div className="camera-view">
+      <button className="camera-close" onClick={() => { stopCamera(); onClose(); }}>
         <IconX size={24} />
       </button>
 
@@ -130,7 +130,7 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
             padding: 0,
             boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
           }}
-          aria-label=\"Take photo\"
+          aria-label="Take photo"
         >
           <IconCamera size={32} style={{ color: 'var(--green-800)' }} />
         </button>
@@ -144,7 +144,7 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
           zIndex: 10, background: 'rgba(0,0,0,0.7)',
           padding: 20, borderRadius: 'var(--radius-lg)'
         }}>
-          <div className=\"spinner\" />
+          <div className="spinner" />
           <p style={{ fontWeight: 700 }}>Identifying product...</p>
           <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>Powered by Gemini AI</p>
         </div>
@@ -159,7 +159,7 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
           {error}
           <button
             onClick={() => { setError(''); }}
-            className=\"btn btn-secondary btn-full\"
+            className="btn btn-secondary btn-full"
             style={{ marginTop: 12 }}
           >
             Try Again
