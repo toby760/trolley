@@ -5,7 +5,6 @@ import SplashScreen from './components/SplashScreen';
 import PinLogin from './components/PinLogin';
 import BottomNav from './components/BottomNav';
 import AddItemModal from './components/AddItemModal';
-import BarcodeScanner from './components/BarcodeScanner';
 import PhotoCapture from './components/PhotoCapture';
 import Dashboard from './pages/Dashboard';
 import ShoppingList from './pages/ShoppingList';
@@ -16,7 +15,6 @@ function AppContent() {
   const { household, currentUser, loading } = useHousehold();
   const [showSplash, setShowSplash] = useState(true);
   const [showAddItem, setShowAddItem] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [scannedProduct, setScannedProduct] = useState(null);
 
@@ -26,7 +24,6 @@ function AppContent() {
 
   const handleProductScanned = useCallback((product) => {
     setScannedProduct(product);
-    setShowScanner(false);
     setShowCamera(false);
     setShowAddItem(true);
   }, []);
@@ -60,21 +57,12 @@ function AppContent() {
         <Route path="/meals" element={<MealPlanner />} />
       </Routes>
       <BottomNav />
-
       <AddItemModal
         open={showAddItem}
         onClose={closeAddItem}
-        onOpenScanner={() => setShowScanner(true)}
         onOpenCamera={() => setShowCamera(true)}
         initialProduct={scannedProduct}
       />
-
-      <BarcodeScanner
-        open={showScanner}
-        onClose={() => setShowScanner(false)}
-        onProduct={handleProductScanned}
-      />
-
       <PhotoCapture
         open={showCamera}
         onClose={() => setShowCamera(false)}
