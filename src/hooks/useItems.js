@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useHousehold } from './useHousehold';
 import { estimatePrice, suggestStore } from '../lib/prices';
@@ -8,6 +8,7 @@ export function useItems() {
   const [items, setItems] = useState([]);
   const [priceMemory, setPriceMemory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const channelRef = useRef(null);
 
   // Fetch items for current week
   const fetchItems = useCallback(async () => {
@@ -44,32 +45,48 @@ export function useItems() {
   useEffect(() => {
     if (!household || !currentWeek) return;
 
-    const channel = supabase
-      .channel('items-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'items',
-        filter: `week_id=eq.${currentWeek.id}`
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setItems(prev => [...prev, payload.new]);
-          // Create notification for other user
-          if (payload.new.added_by !== currentUser) {
-            createNotification(
-              `${payload.new.added_by === 'T' ? 'Toby' : 'Orla'} added ${payload.new.name}`,
-              currentUser
-            );
-          }
-        } else if (payload.eventType === 'UPDATE') {
-          setItems(prev => prev.map(i => i.id === payload.new.id ? payload.new : i));
-        } else if (payload.eventType === 'DELETE') {
-          setItems(prev => prev.filter(i => i.id !== payload.old.id));
-        }
-      })
-      .subscribe();
+    // Clean up any existing channel first
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
 
-    return () => supabase.removeChannel(channel);
+    try {
+      const channelName = `items-${currentWeek.id}-${Date.now()}`;
+      const channel = supabase
+        .channel(channelName)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'items',
+          filter: `week_id=eq.${currentWeek.id}`
+        }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setItems(prev => [...prev, payload.new]);
+            // Create notification for other user
+            if (payload.new.added_by !== currentUser) {
+              createNotification(
+                `${payload.new.added_by === 'T' ? 'Toby' : 'Orla'} added ${payload.new.name}`,
+                currentUser
+              );
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            setItems(prev => prev.map(i => i.id === payload.new.id ? payload.new : i));
+          } else if (payload.eventType === 'DELETE') {
+            setItems(prev => prev.filter(i => i.id !== payload.old.id));
+          }
+        })
+        .subscribe();
+
+      channelRef.current = channel;
+
+      return () => {
+        supabase.removeChannel(channel);
+        channelRef.current = null;
+      };
+    } catch (err) {
+      console.error('Error setting up items channel:', err);
+    }
   }, [household, currentWeek, currentUser]);
 
   const createNotification = async (message, forUser) => {
