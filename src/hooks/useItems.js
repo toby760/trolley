@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useHousehold } from './useHousehold';
 import { estimatePrice, suggestStore } from '../lib/prices';
+import { getPriceWithGatekeeper } from '../lib/priceLookup';
 
 export function useItems() {
   const { household, currentWeek, currentUser } = useHousehold();
@@ -20,7 +21,6 @@ export function useItems() {
       .eq('household_id', household.id)
       .eq('week_id', currentWeek.id)
       .order('created_at', { ascending: true });
-
     if (!error && data) setItems(data);
     setLoading(false);
   }, [household, currentWeek]);
@@ -44,13 +44,10 @@ export function useItems() {
   // Real-time subscription
   useEffect(() => {
     if (!household || !currentWeek) return;
-
-    // Clean up any existing channel first
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
-
     try {
       const channelName = `items-${currentWeek.id}-${Date.now()}`;
       const channel = supabase
@@ -63,7 +60,6 @@ export function useItems() {
         }, (payload) => {
           if (payload.eventType === 'INSERT') {
             setItems(prev => [...prev, payload.new]);
-            // Create notification for other user
             if (payload.new.added_by !== currentUser) {
               createNotification(
                 `${payload.new.added_by === 'T' ? 'Toby' : 'Orla'} added ${payload.new.name}`,
@@ -77,9 +73,7 @@ export function useItems() {
           }
         })
         .subscribe();
-
       channelRef.current = channel;
-
       return () => {
         supabase.removeChannel(channel);
         channelRef.current = null;
@@ -99,11 +93,13 @@ export function useItems() {
     });
   };
 
-  const addItem = useCallback(async (name, store, customPrice) => {
-    if (!household || !currentWeek || !currentUser) return;
+  // Add item - inserts immediately with null price, then resolves price in background.
+  // The UI shows "Checking price..." until the background task updates the row.
+  const addItem = useCallback(async (name, store, options = {}) => {
+    if (!household || !currentWeek || !currentUser) return null;
+    const { brand, weight } = options || {};
 
-    const price = customPrice ?? estimatePrice(name, store, priceMemory);
-
+    // Insert row immediately with null price so the modal can close straight away
     const { data, error } = await supabase
       .from('items')
       .insert({
@@ -112,7 +108,7 @@ export function useItems() {
         name,
         store,
         added_by: currentUser,
-        estimated_price: price,
+        estimated_price: null,
         status: 'active'
       })
       .select()
@@ -122,28 +118,58 @@ export function useItems() {
       console.error('Error adding item:', error);
       return null;
     }
+
+    // Fire-and-forget: resolve price in background, then update row.
+    // Realtime subscription picks up the UPDATE and refreshes the list.
+    if (data) {
+      const itemId = data.id;
+      const householdId = household.id;
+      (async () => {
+        let resolved = null;
+        try {
+          const result = await getPriceWithGatekeeper({
+            name, brand, weight, store, householdId
+          });
+          if (result && typeof result.price === 'number' && result.price > 0) {
+            resolved = result.price;
+          }
+          if (result && result.source === 'serpapi-fresh') {
+            fetchPriceMemory?.();
+          }
+        } catch (err) {
+          console.warn('Background price lookup failed:', err && err.message);
+        }
+        // Fallback to heuristic estimate so the row never stays stuck on "Checking..."
+        if (resolved == null) {
+          resolved = estimatePrice(name, store, priceMemory);
+        }
+        try {
+          await supabase
+            .from('items')
+            .update({ estimated_price: resolved, updated_at: new Date().toISOString() })
+            .eq('id', itemId);
+        } catch (err) {
+          console.warn('Failed to update item price:', err && err.message);
+        }
+      })();
+    }
+
     return data;
-  }, [household, currentWeek, currentUser, priceMemory]);
+  }, [household, currentWeek, currentUser, priceMemory, fetchPriceMemory]);
 
   const toggleItem = useCallback(async (itemId) => {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
-
     const newStatus = item.status === 'done' ? 'active' : 'done';
-
-    // Optimistic update - instant UI feedback
     setItems(prev => prev.map(i =>
       i.id === itemId ? { ...i, status: newStatus } : i
     ));
-
-    // Then sync to server in background (no await blocking UI)
     supabase
       .from('items')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', itemId)
       .then(({ error }) => {
         if (error) {
-          // Revert on failure
           setItems(prev => prev.map(i =>
             i.id === itemId ? { ...i, status: item.status } : i
           ));
@@ -178,7 +204,6 @@ export function useItems() {
     return estimatePrice(productName, store, priceMemory);
   }, [priceMemory]);
 
-  // Computed values
   const aldiItems = items.filter(i => i.store === 'aldi');
   const woolworthsItems = items.filter(i => i.store === 'woolworths');
   const aldiTotal = aldiItems.reduce((sum, i) => sum + (parseFloat(i.estimated_price) || 0), 0);
@@ -188,11 +213,24 @@ export function useItems() {
   const doneCount = items.filter(i => i.status === 'done').length;
 
   return {
-    items, aldiItems, woolworthsItems, loading,
-    aldiTotal, woolworthsTotal, combinedTotal,
-    activeCount, doneCount, priceMemory,
-    addItem, toggleItem, deleteItem, updateItem,
-    moveToWoolworths, getSuggestedStore, getEstimatedPrice,
-    fetchItems, fetchPriceMemory
+    items,
+    aldiItems,
+    woolworthsItems,
+    loading,
+    aldiTotal,
+    woolworthsTotal,
+    combinedTotal,
+    activeCount,
+    doneCount,
+    priceMemory,
+    addItem,
+    toggleItem,
+    deleteItem,
+    updateItem,
+    moveToWoolworths,
+    getSuggestedStore,
+    getEstimatedPrice,
+    fetchItems,
+    fetchPriceMemory
   };
 }
