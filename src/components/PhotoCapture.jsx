@@ -45,11 +45,8 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
     if (!videoRef.current || !canvasRef.current) return;
     setProcessing(true);
     setError('');
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
-
-    // Cap image at 1280px max dimension to keep payload small
     const maxDim = 1280;
     let w = video.videoWidth;
     let h = video.videoHeight;
@@ -62,24 +59,23 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
     canvas.height = h;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, w, h);
-
     try {
       const base64 = canvas.toDataURL('image/jpeg', 0.85);
       stopCamera();
-
       const res = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: base64, mode: 'product' })
       });
-
       if (!res.ok) throw new Error('API error');
       const data = await res.json();
-
       if (data.item_name) {
         onProduct({
           name: data.item_name,
           brand: data.brand || '',
+          // Capture size/weight from Gemini so the Gatekeeper can build a
+          // specific SerpApi query (e.g. "Campos Superior 500g").
+          weight: data.volume_weight || '',
           suggested_store: data.suggested_store || '',
           confidence: data.confidence || 'medium',
           category: data.category || '',
@@ -106,7 +102,6 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
       <button className="camera-close" onClick={() => { stopCamera(); onClose(); }}>
         <IconX size={24} />
       </button>
-
       <video
         ref={videoRef}
         autoPlay
@@ -115,17 +110,17 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
       />
       <canvas ref={canvasRef} style={{ display: 'none' }} />
-
       <div style={{
-        position: 'absolute', top: 'env(safe-area-inset-top, 16px)',
-        left: 0, right: 0, textAlign: 'center', paddingTop: 60, zIndex: 5
+        position: 'absolute',
+        top: 'env(safe-area-inset-top, 16px)',
+        left: 0, right: 0, textAlign: 'center',
+        paddingTop: 60, zIndex: 5
       }}>
-        <h2 style={{ fontSize: 20, fontWeight: 800 }}>Smart Add</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 800 }}>Smart Photo</h2>
         <p style={{ fontSize: 14, color: 'var(--gray-300)', marginTop: 4 }}>
           Point at a product label and tap to identify
         </p>
       </div>
-
       {!processing && !error && (
         <button
           onClick={captureAndIdentify}
@@ -134,33 +129,32 @@ export default function PhotoCapture({ open, onClose, onProduct }) {
             bottom: 'calc(40px + env(safe-area-inset-bottom, 20px))',
             left: '50%', transform: 'translateX(-50%)',
             width: 80, height: 80, borderRadius: '50%',
-            background: 'white',
-            border: '5px solid var(--green-400)',
+            background: 'white', border: '5px solid var(--green-400)',
             cursor: 'pointer', zIndex: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 0,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            padding: 0, boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
           }}
           aria-label="Take photo"
         >
           <IconCamera size={32} style={{ color: 'var(--green-800)' }} />
         </button>
       )}
-
       {processing && (
         <div style={{
           position: 'absolute', bottom: 100, left: '50%',
           transform: 'translateX(-50%)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-          zIndex: 10, background: 'rgba(0,0,0,0.7)',
-          padding: 20, borderRadius: 'var(--radius-lg)'
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: 8, zIndex: 10,
+          background: 'rgba(0,0,0,0.7)', padding: 20,
+          borderRadius: 'var(--radius-lg)'
         }}>
           <div className="spinner" />
           <p style={{ fontWeight: 700 }}>Identifying product...</p>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>Powered by Gemini AI</p>
+          <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+            Powered by Gemini AI
+          </p>
         </div>
       )}
-
       {error && (
         <div style={{
           position: 'absolute', bottom: 100, left: 20, right: 20,
