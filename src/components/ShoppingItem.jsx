@@ -3,6 +3,8 @@ import { IconCheck, IconTrash, IconEdit } from '../lib/icons';
 
 export default function ShoppingItem({ item, onToggle, onDelete, onEdit }) {
   const isDone = item.status === 'done';
+  const price = parseFloat(item.estimated_price || 0);
+  const hasPrice = price > 0;
 
   return (
     <div className={`shopping-item ${isDone ? 'done' : ''}`}>
@@ -22,9 +24,15 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit }) {
           <span className={`item-user-badge ${item.added_by === 'T' ? 'toby' : 'orla'}`}>
             {item.added_by}
           </span>
-          <span className="item-price">
-            ${parseFloat(item.estimated_price || 0).toFixed(2)}
-          </span>
+          {hasPrice ? (
+            <span className="item-price">
+              ${price.toFixed(2)}
+            </span>
+          ) : (
+            <span className="item-price item-price-checking">
+              🔍 Checking price...
+            </span>
+          )}
         </div>
       </div>
 
