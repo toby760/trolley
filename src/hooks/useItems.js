@@ -53,9 +53,7 @@ export function useItems() {
       const channel = supabase
         .channel(channelName)
         .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'items',
+          event: '*', schema: 'public', table: 'items',
           filter: `week_id=eq.${currentWeek.id}`
         }, (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -67,7 +65,9 @@ export function useItems() {
               );
             }
           } else if (payload.eventType === 'UPDATE') {
-            setItems(prev => prev.map(i => i.id === payload.new.id ? payload.new : i));
+            setItems(prev => prev.map(i =>
+              i.id === payload.new.id ? payload.new : i
+            ));
           } else if (payload.eventType === 'DELETE') {
             setItems(prev => prev.filter(i => i.id !== payload.old.id));
           }
@@ -93,13 +93,20 @@ export function useItems() {
     });
   };
 
-  // Add item - inserts immediately with null price, then resolves price in background.
-  // The UI shows "Checking price..." until the background task updates the row.
+  // Add item - inserts immediately with null price, then resolves price in
+  // background. Realtime subscription picks up the UPDATE and refreshes.
+  //
+  // options.mode: 'typed' | 'photo' (default 'typed').
+  //   'typed' -> Gatekeeper tries receipt memory + SERP memory only; on
+  //              miss, we fall back to estimatePrice. NO live SerpApi.
+  //   'photo' -> Gatekeeper can make a live SerpApi call after the two
+  //              cache tiers miss, because Smart Photo gives us exact
+  //              brand + size which justifies the credit.
   const addItem = useCallback(async (name, store, options = {}) => {
     if (!household || !currentWeek || !currentUser) return null;
-    const { brand, weight } = options || {};
+    const { brand = '', weight = '', mode = 'typed' } = options || {};
 
-    // Insert row immediately with null price so the modal can close straight away
+    // Insert row immediately with null price so the modal can close.
     const { data, error } = await supabase
       .from('items')
       .insert({
@@ -120,15 +127,15 @@ export function useItems() {
     }
 
     // Fire-and-forget: resolve price in background, then update row.
-    // Realtime subscription picks up the UPDATE and refreshes the list.
     if (data) {
       const itemId = data.id;
-      const householdId = household.id;
       (async () => {
         let resolved = null;
         try {
           const result = await getPriceWithGatekeeper({
-            name, brand, weight, store, householdId
+            name, brand, weight, store,
+            householdId: household.id,
+            mode
           });
           if (result && typeof result.price === 'number' && result.price > 0) {
             resolved = result.price;
@@ -139,14 +146,17 @@ export function useItems() {
         } catch (err) {
           console.warn('Background price lookup failed:', err && err.message);
         }
-        // Fallback to heuristic estimate so the row never stays stuck on "Checking..."
+        // Fallback to heuristic estimate so the row never stays stuck.
         if (resolved == null) {
           resolved = estimatePrice(name, store, priceMemory);
         }
         try {
           await supabase
             .from('items')
-            .update({ estimated_price: resolved, updated_at: new Date().toISOString() })
+            .update({
+              estimated_price: resolved,
+              updated_at: new Date().toISOString()
+            })
             .eq('id', itemId);
         } catch (err) {
           console.warn('Failed to update item price:', err && err.message);
@@ -192,7 +202,11 @@ export function useItems() {
   const moveToWoolworths = useCallback(async (itemIds) => {
     await supabase
       .from('items')
-      .update({ store: 'woolworths', status: 'active', updated_at: new Date().toISOString() })
+      .update({
+        store: 'woolworths',
+        status: 'active',
+        updated_at: new Date().toISOString()
+      })
       .in('id', itemIds);
   }, []);
 
@@ -206,31 +220,20 @@ export function useItems() {
 
   const aldiItems = items.filter(i => i.store === 'aldi');
   const woolworthsItems = items.filter(i => i.store === 'woolworths');
-  const aldiTotal = aldiItems.reduce((sum, i) => sum + (parseFloat(i.estimated_price) || 0), 0);
-  const woolworthsTotal = woolworthsItems.reduce((sum, i) => sum + (parseFloat(i.estimated_price) || 0), 0);
+  const aldiTotal = aldiItems.reduce((sum, i) =>
+    sum + (parseFloat(i.estimated_price) || 0), 0);
+  const woolworthsTotal = woolworthsItems.reduce((sum, i) =>
+    sum + (parseFloat(i.estimated_price) || 0), 0);
   const combinedTotal = aldiTotal + woolworthsTotal;
   const activeCount = items.filter(i => i.status === 'active').length;
   const doneCount = items.filter(i => i.status === 'done').length;
 
   return {
-    items,
-    aldiItems,
-    woolworthsItems,
-    loading,
-    aldiTotal,
-    woolworthsTotal,
-    combinedTotal,
-    activeCount,
-    doneCount,
-    priceMemory,
-    addItem,
-    toggleItem,
-    deleteItem,
-    updateItem,
-    moveToWoolworths,
-    getSuggestedStore,
-    getEstimatedPrice,
-    fetchItems,
-    fetchPriceMemory
+    items, aldiItems, woolworthsItems, loading,
+    aldiTotal, woolworthsTotal, combinedTotal,
+    activeCount, doneCount, priceMemory,
+    addItem, toggleItem, deleteItem, updateItem,
+    moveToWoolworths, getSuggestedStore, getEstimatedPrice,
+    fetchItems, fetchPriceMemory
   };
 }
