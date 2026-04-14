@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase';
 
 const HouseholdContext = createContext(null);
 
+// Household access PIN — locked to 2525
+const HOUSEHOLD_PIN = '2525';
+
 export function HouseholdProvider({ children }) {
   const [household, setHousehold] = useState(null);
   const [currentUser, setCurrentUser] = useState(null); // 'T' or 'O'
@@ -72,6 +75,11 @@ export function HouseholdProvider({ children }) {
   };
 
   const loginWithPin = useCallback(async (pin) => {
+    // PIN is locked to 2525 for this household
+    if (pin !== HOUSEHOLD_PIN) {
+      throw new Error('Invalid PIN');
+    }
+
     const { data, error } = await supabase
       .from('households')
       .select('*')
@@ -79,7 +87,7 @@ export function HouseholdProvider({ children }) {
       .single();
 
     if (error || !data) {
-      // Try to create new household
+      // Try to create new household with the locked PIN
       const { data: newHousehold, error: createErr } = await supabase
         .from('households')
         .insert({ pin })
