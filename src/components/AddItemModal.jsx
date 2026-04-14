@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { IconX, IconBarcode, IconCamera, IconSearch } from '../lib/icons';
+import { IconX, IconCamera, IconSearch } from '../lib/icons';
 import { useItems } from '../hooks/useItems';
 
 // Debounce helper
@@ -26,7 +26,7 @@ function extractWeight(name) {
 }
 
 export default function AddItemModal({
-  open, onClose, onOpenScanner, onOpenCamera, initialProduct
+  open, onClose, onOpenCamera, initialProduct
 }) {
   const { addItem, getSuggestedStore, getEstimatedPrice, priceMemory } = useItems();
   const [query, setQuery] = useState('');
@@ -216,53 +216,31 @@ export default function AddItemModal({
             </div>
           </div>
 
-          {/* Scan / Photo buttons - prominent */}
-          <div style={{ display: 'flex', gap: 12, padding: '16px 20px' }}>
-            <button
-              onClick={() => { onClose(); onOpenScanner?.(); }}
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 6,
-                padding: '16px 12px',
-                background: 'var(--green-800)',
-                border: '2px solid var(--green-600)',
-                borderRadius: 16,
-                color: 'var(--green-300)',
-                fontFamily: 'Nunito, sans-serif',
-                fontWeight: 800,
-                fontSize: 14,
-                cursor: 'pointer',
-                minHeight: 80
-              }}
-            >
-              <IconBarcode size={28} />
-              Scan Barcode
-            </button>
+          {/* Smart Item Photo - single prominent button */}
+          <div style={{ padding: '16px 20px' }}>
             <button
               onClick={() => { onClose(); onOpenCamera?.(); }}
               style={{
-                flex: 1,
+                width: '100%',
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: 'row',
                 alignItems: 'center',
-                gap: 6,
-                padding: '16px 12px',
+                justifyContent: 'center',
+                gap: 12,
+                padding: '20px',
                 background: 'var(--green-800)',
                 border: '2px solid var(--green-600)',
                 borderRadius: 16,
                 color: 'var(--green-300)',
                 fontFamily: 'Nunito, sans-serif',
                 fontWeight: 800,
-                fontSize: 14,
+                fontSize: 16,
                 cursor: 'pointer',
-                minHeight: 80
+                minHeight: 72
               }}
             >
               <IconCamera size={28} />
-              Photo Product
+              Smart Item Photo
             </button>
           </div>
 
@@ -342,7 +320,7 @@ export default function AddItemModal({
                 <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>&#128269;</div>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>Type to search</div>
                 <div style={{ fontSize: 14, marginTop: 4, color: 'var(--gray-500)' }}>
-                  Or scan a barcode / photo a label
+                  Or use Smart Item Photo
                 </div>
               </div>
             )}
