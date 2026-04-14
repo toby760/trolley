@@ -1,75 +1,107 @@
-// Gatekeeper price lookup.
-// Checks Supabase price_memory first so we only spend SerpApi credits on
-// genuinely new items. ~250 searches per month -> keep this disciplined.
+// ============================================
+// GATEKEEPER — price lookup with credit protection
+// --------------------------------------------
+// SerpApi has a hard monthly cap (~250 lookups). Every call we can avoid
+// saves Toby a credit, so the Gatekeeper is aggressive about reusing
+// prices we already know.
+//
+// Row tagging (no schema change):
+//   purchase_count >  0  →  row came from a scanned RECEIPT (ground truth)
+//   purchase_count == 0  →  row came from a SerpApi call    (cached estimate)
+//
+// Lookup tiers (all free):
+//   T1. Receipt row for THIS store       → ground truth for this store, use it
+//   T2. Receipt row for ANY store        → receipt is still ground truth even if
+//                                           we bought it elsewhere — use it
+//   T3. SerpApi-cached row for ANY store → previously-paid estimate, reuse it
+//                                           rather than burn another credit
+//   T4. Call SerpApi (1 credit), then cache the result at purchase_count=0 so
+//       future photos of the same product are free. When a receipt later
+//       lands for this product the upsert in ReceiptScanner.jsx will
+//       overwrite the SerpApi estimate with the real receipt price.
+// ============================================
+
 import { supabase } from './supabase';
 
-function normalize(name) {
-  return (name || '').trim().toLowerCase();
-}
+/**
+ * @param {string} productName - e.g. "Campos King St Coffee 250g"
+ * @param {string} householdId - uuid of the current household
+ * @param {object} [opts]
+ * @param {string} [opts.store]  - 'aldi' | 'woolworths'
+ * @param {string} [opts.brand]  - e.g. "Campos"  (used for SerpApi query)
+ * @param {string} [opts.weight] - e.g. "250g"    (used for SerpApi query)
+ * @returns {Promise<number|null>} resolved price in AUD, or null if nothing found
+ */
+export async function getPriceWithGatekeeper(productName, householdId, opts = {}) {
+  if (!productName || !householdId) return null;
 
-export async function getPriceWithGatekeeper({ name, brand, weight, store, householdId }) {
-  if (!name || !householdId) {
-    return { price: null, source: 'missing-input' };
-  }
+  const { store = null, brand = '', weight = '' } = opts;
 
-  const normalized = normalize(name);
-
-  // STEP 1 - Check this household's price_memory for an existing match
+  // Tiered lookup against price_memory (free).
   try {
-    const { data } = await supabase
+    const { data: rows } = await supabase
       .from('price_memory')
-      .select('product_name, last_known_price, updated_at')
+      .select('*')
       .eq('household_id', householdId)
-      .ilike('product_name', normalized)
-      .maybeSingle();
+      .ilike('product_name', productName);
 
-    if (data && data.last_known_price) {
-      return {
-        price: Number(data.last_known_price),
-        source: 'cache',
-        cached_at: data.updated_at
-      };
+    if (rows && rows.length > 0) {
+      // T1 + T2: prefer any receipt-sourced row (purchase_count > 0), with a
+      // tiebreak for the current store so per-store pricing wins when we have it.
+      const receiptRows = rows.filter(r => (r.purchase_count || 0) > 0);
+      if (receiptRows.length > 0) {
+        const sameStore = store && receiptRows.find(r => r.store === store);
+        return (sameStore || receiptRows[0]).last_known_price;
+      }
+
+      // T3: fall back to any SerpApi-cached row — avoids burning a second credit
+      // on a product we already paid SerpApi to price once before.
+      const serpRows = rows.filter(r => (r.purchase_count || 0) === 0);
+      if (serpRows.length > 0) {
+        return serpRows[0].last_known_price;
+      }
     }
-  } catch (err) {
-    console.warn('price_memory lookup failed:', err && err.message);
+  } catch (memErr) {
+    console.error('price_memory lookup failed, continuing to SerpApi', memErr);
   }
 
-  // STEP 2 - Cache miss: ask the server to query SerpApi
-  let serpResult = null;
+  // T4: SerpApi call — COSTS 1 CREDIT of the monthly 250.
+  let price = null;
   try {
-    const response = await fetch('/api/serpapi-price', {
+    const res = await fetch('/api/serpapi-price', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, brand, weight, store })
+      body: JSON.stringify({ productName, brand, weight })
     });
-
-    if (response.ok) {
-      serpResult = await response.json();
-    }
-  } catch (err) {
-    console.error('SerpApi fetch failed:', err && err.message);
+    if (!res.ok) return null;
+    const data = await res.json();
+    price = typeof data?.price === 'number' ? data.price : null;
+  } catch (e) {
+    console.error('SerpApi proxy call failed', e);
+    return null;
   }
 
-  if (!serpResult || !serpResult.price || serpResult.price <= 0) {
-    return { price: null, source: 'serpapi-no-match' };
-  }
+  if (price == null) return null;
 
-  // STEP 3 - Save the fresh price so future adds of this item are free
+  // Cache the SerpApi result tagged with purchase_count=0 so we can tell it
+  // apart from receipt-sourced rows. Use upsert with the existing unique
+  // constraint so that a later receipt scan for the same (household, product,
+  // store) overwrites this estimate with the real receipt price.
   try {
-    await supabase
-      .from('price_memory')
-      .upsert(
-        {
-          household_id: householdId,
-          product_name: name.trim(),
-          last_known_price: serpResult.price,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'household_id,product_name' }
-      );
-  } catch (err) {
-    console.warn('price_memory upsert failed:', err && err.message);
+    await supabase.from('price_memory').upsert({
+      household_id: householdId,
+      product_name: productName,
+      store: store || 'woolworths',
+      last_known_price: price,
+      purchase_count: 0,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'household_id,product_name,store'
+    });
+  } catch (cacheErr) {
+    // Non-fatal — we still return the price we paid for.
+    console.error('Could not persist new price into price_memory', cacheErr);
   }
 
-  return { price: serpResult.price, source: 'serpapi-fresh' };
+  return price;
 }
