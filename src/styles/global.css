@@ -1255,7 +1255,7 @@ body {
 .modal-sheet {
   width: 100%;
   max-width: 500px;
-  max-height: 85vh;
+  max-height: 85dvh;
   background: var(--green-850);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
@@ -1315,7 +1315,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 60vh;
+  height: 60dvh;
   text-align: center;
   color: var(--gray-400);
 }
