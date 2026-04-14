@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'name is required' });
   }
 
-  // Build disciplined query: [Brand] [Name] [Weight] Australia price at [Store]
+  // Build lean query: [Brand] [Name] [Weight] - gl=au handles geo, post-sort handles store preference
   const storeName =
     store === 'aldi' ? 'Aldi' :
     store === 'woolworths' ? 'Woolworths' : '';
@@ -26,8 +26,6 @@ export default async function handler(req, res) {
   if (brand) parts.push(brand);
   parts.push(name);
   if (weight) parts.push(weight);
-  parts.push('Australia price');
-  if (storeName) parts.push(`at ${storeName}`);
   const query = parts.join(' ');
 
   try {
@@ -36,7 +34,7 @@ export default async function handler(req, res) {
       + '&gl=au&hl=en&api_key=' + encodeURIComponent(apiKey);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 9500);
 
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
