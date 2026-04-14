@@ -6,6 +6,13 @@
 // We return up to 50 products with product_name + brands + quantity +
 // categories_tags so the client can apply its own relevance filter (every
 // search term must appear in the product name).
+//
+// Strategy: OFF v2's `search_terms` biases popularity but does NOT text-filter,
+// so typing "milk" otherwise returns Weet-Bix/Vegemite. Category filters DO
+// actually filter — so we try category=<term>s then category=<term> first for
+// generic food words. For brand-ish queries (vegemite, tim tam) categories
+// return nothing, so we fall back to CGI text search which does filter by
+// name, then the v2 popularity endpoints as a last resort.
 
 export default async function handler(req, res) {
   const q = (req.query?.q || '').toString().trim();
@@ -16,17 +23,16 @@ export default async function handler(req, res) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9500);
   const enc = encodeURIComponent(q);
-  // Ordered by how well they actually filter AU-relevant matches for the
-  // search term. world + countries_tags_en=australia gives the best mix of
-  // relevance + popularity. au.openfoodfacts.org is just the AU UI locale
-  // (not an actual AU-only filter) and sorts purely by popularity which
-  // surfaces Weet-Bix for "milk", so it's a fallback. CGI is last resort.
   const fields = 'product_name,brands,quantity,categories_tags';
+  // Order matters: category filters give the most relevant AU results for
+  // generic food words; CGI text search handles brand queries; v2 popularity
+  // endpoints are the fallback when nothing else works.
   const endpoints = [
+    `https://world.openfoodfacts.org/api/v2/search?categories_tags_en=${enc}s&countries_tags_en=australia&sort_by=popularity_key&fields=${fields}&page_size=50`,
+    `https://world.openfoodfacts.org/api/v2/search?categories_tags_en=${enc}&countries_tags_en=australia&sort_by=popularity_key&fields=${fields}&page_size=50`,
+    `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${enc}&search_simple=1&action=process&json=1&page_size=50&fields=${fields}`,
     `https://world.openfoodfacts.org/api/v2/search?search_terms=${enc}&countries_tags_en=australia&sort_by=popularity_key&fields=${fields}&page_size=50`,
-    `https://au.openfoodfacts.org/api/v2/search?search_terms=${enc}&sort_by=popularity_key&fields=${fields}&page_size=50`,
-    `https://world.openfoodfacts.org/api/v2/search?search_terms=${enc}&sort_by=popularity_key&fields=${fields}&page_size=50`,
-    `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${enc}&search_simple=1&action=process&json=1&page_size=50&fields=${fields}`
+    `https://au.openfoodfacts.org/api/v2/search?search_terms=${enc}&sort_by=popularity_key&fields=${fields}&page_size=50`
   ];
   let lastError = null;
   for (const url of endpoints) {
