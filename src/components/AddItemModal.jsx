@@ -88,10 +88,11 @@ export default function AddItemModal({
         .map(p => ({ name: p.product_name, source: 'history', price: p.last_known_price }));
       results.push(...householdMatches);
 
-      // 2. Search Open Food Facts (filtered to Australian products)
+      // 2. Search Open Food Facts via our Vercel proxy (reliable,
+      //    avoids CORS/CDN flakiness that direct browser fetches hit)
       try {
         const res = await fetch(
-          `https://au.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(debouncedQuery)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name`
+          `/api/off-search?q=${encodeURIComponent(debouncedQuery)}`
         );
         const data = await res.json();
         if (data.products) {
@@ -102,7 +103,7 @@ export default function AddItemModal({
           results.push(...offResults.slice(0, 5));
         }
       } catch (e) {
-        // Open Food Facts unavailable, continue with local results
+        // Proxy unavailable, continue with local results
       }
 
       // 3. Always include the raw query as an option
