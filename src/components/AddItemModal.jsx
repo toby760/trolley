@@ -1,11 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { IconX, IconCamera, IconSearch, IconPlus, IconClock } from '../lib/icons';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { IconX, IconBarcode, IconCamera, IconSearch } from '../lib/icons';
 import { useItems } from '../hooks/useItems';
-import { useHousehold } from '../hooks/useHousehold';
-import { searchGroceryDatabase } from '../lib/groceryData';
-import { getPriceWithGatekeeper } from '../lib/priceLookup';
 
-// Fast debounce hook - 120ms for near-instant feel with local search
+// Debounce helper
 function useDebounce(value, delay) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -15,9 +12,23 @@ function useDebounce(value, delay) {
   return debounced;
 }
 
-export default function AddItemModal({ open, onClose, onOpenCamera, initialProduct }) {
-  const { addItem, getSuggestedStore, getEstimatedPrice, priceMemory, fetchPriceMemory } = useItems();
-  const { household } = useHousehold();
+// Pull a weight/volume token out of a product name, e.g.
+// "Vegemite 380g"        -> "380g"
+// "Campos Coffee 250 G"  -> "250 G"
+// "Milk 2L"              -> "2L"
+// Returns '' if nothing matches.
+function extractWeight(name) {
+  if (!name) return '';
+  const m = name.match(
+    /\b(\d+(?:\.\d+)?\s?(?:kg|g|mg|ml|l|pk|pack|ct|ea))\b/i
+  );
+  return m ? m[1].trim() : '';
+}
+
+export default function AddItemModal({
+  open, onClose, onOpenScanner, onOpenCamera, initialProduct
+}) {
+  const { addItem, getSuggestedStore, getEstimatedPrice, priceMemory } = useItems();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [selectedName, setSelectedName] = useState('');
@@ -25,32 +36,12 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
   const [selectedWeight, setSelectedWeight] = useState('');
   const [store, setStore] = useState(null);
   const [step, setStep] = useState('search'); // 'search' | 'store'
-  const [checkingPrice, setCheckingPrice] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const inputRef = useRef();
+  const debouncedQuery = useDebounce(query, 300);
 
-  const debouncedQuery = useDebounce(query, 120);
-
-  // Pre-index household history for fast search
-  const historyIndex = useMemo(() => {
-    return priceMemory.map(p => ({
-      name: p.product_name,
-      lower: p.product_name.toLowerCase(),
-      price: p.last_known_price,
-      source: 'history'
-    }));
-  }, [priceMemory]);
-
-  // Handle initial product from camera (Smart Add)
   useEffect(() => {
-    if (open && initialProduct) {
-      setSelectedName(initialProduct.name || '');
-      setSelectedBrand(initialProduct.brand || '');
-      setSelectedWeight(initialProduct.volume_weight || initialProduct.weight || '');
-      setStore(initialProduct.suggested_store || getSuggestedStore(initialProduct.name));
-      setStep('store');
-      setQuery('');
-      setSuggestions([]);
-    } else if (open) {
+    if (open) {
       setQuery('');
       setSelectedName('');
       setSelectedBrand('');
@@ -58,116 +49,163 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
       setStore(null);
       setStep('search');
       setSuggestions([]);
-      setCheckingPrice(false);
-      setTimeout(() => inputRef.current?.focus(), 200);
-    }
-  }, [open, initialProduct]);
 
-  // Smart local-first suggestion engine
+      // If we opened from a Scan/Photo flow, skip the search step and go
+      // straight to the store picker with brand/weight already populated.
+      if (initialProduct?.name) {
+        const name = initialProduct.name;
+        const brand = initialProduct.brand || initialProduct.brands || '';
+        setSelectedName(name);
+        setSelectedBrand(brand);
+        setSelectedWeight(extractWeight(name));
+        setStore(
+          initialProduct.suggested_store ||
+          getSuggestedStore(name)
+        );
+        setStep('store');
+      } else {
+        setTimeout(() => inputRef.current?.focus(), 200);
+      }
+    }
+  }, [open, initialProduct, getSuggestedStore]);
+
+  // Autocomplete: search household history first, then Open Food Facts
   useEffect(() => {
-    if (!debouncedQuery || debouncedQuery.length < 1) {
+    if (!debouncedQuery || debouncedQuery.length < 2) {
       setSuggestions([]);
       return;
     }
 
-    const lower = debouncedQuery.toLowerCase().trim();
-    const results = [];
-    const seen = new Set();
+    const search = async () => {
+      setLoadingSuggestions(true);
+      const results = [];
 
-    // 1. Household history - highest priority (items you've bought before)
-    for (const item of historyIndex) {
-      if (item.lower.includes(lower)) {
-        results.push(item);
-        seen.add(item.lower);
+      // 1. Search price memory (household's own items)
+      const lower = debouncedQuery.toLowerCase();
+      const householdMatches = priceMemory
+        .filter(p => p.product_name.toLowerCase().includes(lower))
+        .slice(0, 3)
+        .map(p => ({ name: p.product_name, source: 'history', price: p.last_known_price }));
+      results.push(...householdMatches);
+
+      // 2. Search Open Food Facts (filtered to Australian products)
+      try {
+        const res = await fetch(
+          `https://au.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(debouncedQuery)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name`
+        );
+        const data = await res.json();
+        if (data.products) {
+          const offResults = data.products
+            .filter(p => p.product_name)
+            .map(p => ({ name: p.product_name, source: 'openfoodfacts' }))
+            .filter(p => !results.some(r => r.name.toLowerCase() === p.name.toLowerCase()));
+          results.push(...offResults.slice(0, 5));
+        }
+      } catch (e) {
+        // Open Food Facts unavailable, continue with local results
       }
-      if (results.length >= 3) break;
-    }
 
-    // 2. Curated Australian grocery database - instant, no API
-    const dbResults = searchGroceryDatabase(debouncedQuery, 8);
-    for (const r of dbResults) {
-      const rLower = r.name.toLowerCase();
-      if (!seen.has(rLower)) {
-        results.push({ ...r, source: 'database' });
-        seen.add(rLower);
+      // 3. Always include the raw query as an option
+      if (!results.some(r => r.name.toLowerCase() === lower)) {
+        results.unshift({ name: debouncedQuery, source: 'custom' });
       }
-    }
 
-    // 3. Always include the user's typed query as a custom option
-    if (!seen.has(lower) && debouncedQuery.trim().length >= 2) {
-      results.push({ name: debouncedQuery.trim(), source: 'custom' });
-    }
+      setSuggestions(results.slice(0, 8));
+      setLoadingSuggestions(false);
+    };
 
-    setSuggestions(results.slice(0, 10));
-  }, [debouncedQuery, historyIndex]);
+    search();
+  }, [debouncedQuery, priceMemory]);
 
-  const selectProduct = useCallback((name) => {
+  const selectProduct = (name, extra = {}) => {
     setSelectedName(name);
-    setSelectedBrand('');
-    setSelectedWeight('');
+    setSelectedBrand(extra.brand || '');
+    setSelectedWeight(extra.weight || extractWeight(name));
     const suggested = getSuggestedStore(name);
     setStore(suggested);
     setStep('store');
-  }, [getSuggestedStore]);
+  };
 
-  const handleAddItem = useCallback(async () => {
-    if (!selectedName || !store || checkingPrice) return;
-
-    setCheckingPrice(true);
-    let resolvedPrice = null;
-
-    try {
-      const result = await getPriceWithGatekeeper({
-        name: selectedName,
-        brand: selectedBrand,
-        weight: selectedWeight,
-        store,
-        householdId: household?.id
-      });
-      if (result && typeof result.price === 'number' && result.price > 0) {
-        resolvedPrice = result.price;
-      }
-      // If gatekeeper wrote a fresh SerpApi result, refresh local cache view
-      if (result && result.source === 'serpapi-fresh') {
-        fetchPriceMemory?.();
-      }
-    } catch (err) {
-      console.warn('Price gatekeeper failed, falling back to estimate:', err && err.message);
-    }
-
-    await addItem(selectedName, store, resolvedPrice);
-    setCheckingPrice(false);
+  // SNAP & GO: fire addItem off in the background and close the modal
+  // immediately. We pipe brand + weight through so the Gatekeeper can build
+  // a tight SerpApi query (e.g. "Campos King St Coffee 250g") instead of
+  // getting a thousand irrelevant matches.
+  const handleAddItem = () => {
+    if (!selectedName || !store) return;
+    addItem(selectedName, store, {
+      brand: selectedBrand,
+      weight: selectedWeight
+    });
     onClose();
-  }, [selectedName, selectedBrand, selectedWeight, store, checkingPrice, household, addItem, onClose, fetchPriceMemory]);
+  };
 
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && query.trim()) {
       selectProduct(query.trim());
     }
-  }, [query, selectProduct]);
+  };
 
   if (!open) return null;
 
   return (
-    <div className="modal-fullscreen">
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'var(--green-900)',
+      zIndex: 200,
+      display: 'flex',
+      flexDirection: 'column',
+      animation: 'fadeIn 0.2s ease-out'
+    }}>
       {step === 'search' ? (
-        <div className="modal-inner">
-          {/* Header */}
-          <div className="modal-header">
-            <h2 className="modal-title">Add Item</h2>
-            <button className="btn-icon-close" onClick={onClose}>
-              <IconX size={20} />
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Top bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            paddingTop: 'calc(16px + env(safe-area-inset-top))',
+            borderBottom: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Add Item</h2>
+            <button onClick={onClose} style={{
+              background: 'var(--green-700)',
+              border: 'none',
+              color: 'var(--white)',
+              cursor: 'pointer',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <IconX size={22} />
             </button>
           </div>
 
           {/* Search input */}
-          <div className="modal-search-wrap">
-            <div className="search-input-container">
-              <IconSearch size={18} className="search-icon" />
+          <div style={{ padding: '16px 20px 0' }}>
+            <div style={{ position: 'relative' }}>
+              <IconSearch size={20} style={{
+                position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+                color: 'var(--gray-400)', pointerEvents: 'none'
+              }} />
               <input
                 ref={inputRef}
                 type="text"
-                className="search-input"
+                className="input"
+                style={{
+                  paddingLeft: 46,
+                  fontSize: 18,
+                  height: 56,
+                  borderRadius: 16,
+                  background: 'var(--green-800)',
+                  border: '2px solid var(--green-600)',
+                  color: 'white',
+                  caretColor: 'white'
+                }}
                 placeholder="What do you need?"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
@@ -175,158 +213,308 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
                 autoComplete="off"
                 autoCapitalize="words"
               />
-              {query && (
-                <button className="search-clear" onClick={() => setQuery('')}>
-                  <IconX size={16} />
-                </button>
-              )}
             </div>
           </div>
 
-          {/* Smart Add button */}
-          <div className="smart-add-row">
+          {/* Scan / Photo buttons - prominent */}
+          <div style={{ display: 'flex', gap: 12, padding: '16px 20px' }}>
             <button
-              className="smart-add-btn smart-add-full"
-              onClick={() => {
-                onClose();
-                onOpenCamera?.();
+              onClick={() => { onClose(); onOpenScanner?.(); }}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                padding: '16px 12px',
+                background: 'var(--green-800)',
+                border: '2px solid var(--green-600)',
+                borderRadius: 16,
+                color: 'var(--green-300)',
+                fontFamily: 'Nunito, sans-serif',
+                fontWeight: 800,
+                fontSize: 14,
+                cursor: 'pointer',
+                minHeight: 80
               }}
             >
-              <div className="smart-add-icon">
-                <IconCamera size={22} />
-              </div>
-              <span>Smart Add with Camera</span>
+              <IconBarcode size={28} />
+              Scan Barcode
+            </button>
+            <button
+              onClick={() => { onClose(); onOpenCamera?.(); }}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                padding: '16px 12px',
+                background: 'var(--green-800)',
+                border: '2px solid var(--green-600)',
+                borderRadius: 16,
+                color: 'var(--green-300)',
+                fontFamily: 'Nunito, sans-serif',
+                fontWeight: 800,
+                fontSize: 14,
+                cursor: 'pointer',
+                minHeight: 80
+              }}
+            >
+              <IconCamera size={28} />
+              Photo Product
             </button>
           </div>
 
-          {/* Suggestions list */}
-          <div className="suggestions-scroll">
+          {/* Suggestions list - fills remaining space */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
+            {loadingSuggestions && (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+                <div className="spinner" style={{ width: 28, height: 28 }} />
+              </div>
+            )}
+
             {suggestions.length > 0 && (
-              <div className="suggestions-list">
+              <div style={{ marginTop: 4 }}>
+                <div style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: 'var(--gray-400)',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  marginBottom: 8,
+                  paddingLeft: 4
+                }}>
+                  Suggestions
+                </div>
                 {suggestions.map((s, i) => (
                   <button
-                    key={`${s.name}-${i}`}
-                    className={`suggestion-item ${s.source === 'history' ? 'suggestion-history' : ''}`}
+                    key={i}
                     onClick={() => selectProduct(s.name)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '16px',
+                      marginBottom: 8,
+                      background: 'var(--green-800)',
+                      border: s.source === 'history' ? '1px solid var(--green-600)' : '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: 14,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      color: 'var(--white)',
+                      fontFamily: 'Nunito, sans-serif',
+                      minHeight: 56
+                    }}
                   >
-                    <div className="suggestion-left">
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{s.name}</div>
                       {s.source === 'history' && (
-                        <span className="suggestion-badge history-badge">
-                          <IconClock size={12} />
-                        </span>
+                        <div style={{ fontSize: 13, color: 'var(--green-400)', fontWeight: 600, marginTop: 2 }}>
+                          Previously bought {s.price ? `· $${s.price.toFixed(2)}` : ''}
+                        </div>
                       )}
-                      {s.source === 'custom' && (
-                        <span className="suggestion-badge custom-badge">
-                          <IconPlus size={12} />
-                        </span>
-                      )}
-                      <div className="suggestion-text">
-                        <span className="suggestion-name">{s.name}</span>
-                        {s.source === 'history' && s.price && (
-                          <span className="suggestion-meta">
-                            Last bought &middot; ${s.price.toFixed(2)}
-                          </span>
-                        )}
-                        {s.source === 'custom' && (
-                          <span className="suggestion-meta">Add custom item</span>
-                        )}
-                      </div>
                     </div>
-                    <IconPlus size={18} className="suggestion-add-icon" />
+                    {s.source === 'history' && (
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: 'var(--green-400)',
+                        background: 'rgba(79,212,142,0.12)',
+                        padding: '4px 8px',
+                        borderRadius: 8
+                      }}>
+                        HISTORY
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
             )}
 
-            {suggestions.length === 0 && query.length === 0 && (
-              <div className="suggestions-empty">
-                <div className="empty-icon">&#128722;</div>
-                <div className="empty-title">Search or scan</div>
-                <div className="empty-subtitle">
-                  Type a product name or snap a photo with Smart Add
+            {!loadingSuggestions && suggestions.length === 0 && query.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                padding: '32px 20px',
+                color: 'var(--gray-400)'
+              }}>
+                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>&#128269;</div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Type to search</div>
+                <div style={{ fontSize: 14, marginTop: 4, color: 'var(--gray-500)' }}>
+                  Or scan a barcode / photo a label
                 </div>
-              </div>
-            )}
-
-            {suggestions.length === 0 && query.length >= 2 && (
-              <div className="suggestions-list">
-                <button
-                  className="suggestion-item"
-                  onClick={() => selectProduct(query.trim())}
-                >
-                  <div className="suggestion-left">
-                    <span className="suggestion-badge custom-badge">
-                      <IconPlus size={12} />
-                    </span>
-                    <div className="suggestion-text">
-                      <span className="suggestion-name">{query.trim()}</span>
-                      <span className="suggestion-meta">Add custom item</span>
-                    </div>
-                  </div>
-                  <IconPlus size={18} className="suggestion-add-icon" />
-                </button>
               </div>
             )}
           </div>
         </div>
       ) : (
         /* STORE PICKER - step 2 */
-        <div className="modal-inner">
-          {/* Header */}
-          <div className="modal-header">
-            <button className="btn-back" onClick={() => { setStep('search'); setSelectedName(''); setSelectedBrand(''); setSelectedWeight(''); }}>
-              &#8592; Back
-            </button>
-            <button className="btn-icon-close" onClick={onClose}>
-              <IconX size={20} />
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Top bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            paddingTop: 'calc(16px + env(safe-area-inset-top))',
+            borderBottom: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Where to buy?</h2>
+            <button onClick={onClose} style={{
+              background: 'var(--green-700)',
+              border: 'none',
+              color: 'var(--white)',
+              cursor: 'pointer',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <IconX size={22} />
             </button>
           </div>
 
-          {/* Product card */}
-          <div className="store-pick-product">
-            <h3 className="store-pick-name">{selectedName}</h3>
-            <div className="store-pick-price">
-              Est. ${getEstimatedPrice(selectedName, store || 'aldi').toFixed(2)}
+          {/* Product info */}
+          <div style={{ padding: '20px 20px 0' }}>
+            <div style={{
+              background: 'var(--green-800)',
+              borderRadius: 16,
+              padding: '20px',
+              border: '1px solid rgba(255,255,255,0.08)'
+            }}>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{selectedName}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--green-400)', marginTop: 6 }}>
+                Est. ${getEstimatedPrice(selectedName, store || 'aldi').toFixed(2)}
+              </div>
             </div>
           </div>
 
-          {/* Store label */}
-          <div className="store-pick-label">Where to buy?</div>
-
-          {/* Store buttons */}
-          <div className="store-pick-options">
+          {/* Store buttons - BIG and easy to tap */}
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            padding: '24px 20px',
+            justifyContent: 'center'
+          }}>
             <button
-              className={`store-pick-btn store-aldi ${store === 'aldi' ? 'active' : ''}`}
               onClick={() => setStore('aldi')}
+              style={{
+                width: '100%',
+                padding: '28px 24px',
+                borderRadius: 20,
+                border: store === 'aldi' ? '3px solid #6EAAEF' : '3px solid rgba(0,68,139,0.3)',
+                background: store === 'aldi' ? 'var(--aldi-blue)' : 'rgba(0,68,139,0.15)',
+                color: store === 'aldi' ? 'var(--white)' : '#6EAAEF',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 24,
+                fontWeight: 900,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+                minHeight: 90
+              }}
             >
-              <span className="store-name">ALDI</span>
+              ALDI
               {getSuggestedStore(selectedName) === 'aldi' && (
-                <span className="store-suggested-tag">Suggested</span>
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: 'rgba(255,255,255,0.15)',
+                  padding: '4px 10px',
+                  borderRadius: 20
+                }}>
+                  Suggested
+                </span>
               )}
             </button>
+
             <button
-              className={`store-pick-btn store-woolworths ${store === 'woolworths' ? 'active' : ''}`}
               onClick={() => setStore('woolworths')}
+              style={{
+                width: '100%',
+                padding: '28px 24px',
+                borderRadius: 20,
+                border: store === 'woolworths' ? '3px solid #5EDB8A' : '3px solid rgba(0,155,58,0.3)',
+                background: store === 'woolworths' ? 'var(--woolworths-green)' : 'rgba(0,155,58,0.15)',
+                color: store === 'woolworths' ? 'var(--white)' : '#5EDB8A',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 24,
+                fontWeight: 900,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+                minHeight: 90
+              }}
             >
-              <span className="store-name">WOOLWORTHS</span>
+              WOOLWORTHS
               {getSuggestedStore(selectedName) === 'woolworths' && (
-                <span className="store-suggested-tag">Suggested</span>
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: 'rgba(255,255,255,0.15)',
+                  padding: '4px 10px',
+                  borderRadius: 20
+                }}>
+                  Suggested
+                </span>
               )}
             </button>
           </div>
 
-          {/* Bottom action */}
-          <div className="store-pick-actions">
+          {/* Bottom actions */}
+          <div style={{
+            padding: '0 20px 20px',
+            paddingBottom: 'calc(20px + env(safe-area-inset-bottom))'
+          }}>
             <button
-              className={`btn-add-final ${store && !checkingPrice ? 'active' : ''}`}
               onClick={handleAddItem}
-              disabled={!store || checkingPrice}
+              disabled={!store}
+              style={{
+                width: '100%',
+                padding: '18px 24px',
+                borderRadius: 16,
+                border: 'none',
+                background: store ? 'var(--green-600)' : 'var(--green-800)',
+                color: store ? 'var(--white)' : 'var(--gray-500)',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 20,
+                fontWeight: 800,
+                cursor: store ? 'pointer' : 'default',
+                transition: 'all 0.15s',
+                minHeight: 60
+              }}
             >
-              {checkingPrice
-                ? 'Checking price...'
-                : store
-                  ? `Add to ${store === 'aldi' ? 'Aldi' : 'Woolworths'} List`
-                  : 'Pick a store above'}
+              {store ? `Add to ${store === 'aldi' ? 'Aldi' : 'Woolworths'} List` : 'Pick a store above'}
+            </button>
+
+            <button
+              onClick={() => { setStep('search'); setSelectedName(''); }}
+              style={{
+                width: '100%',
+                marginTop: 12,
+                padding: '14px',
+                borderRadius: 12,
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'transparent',
+                color: 'var(--gray-300)',
+                fontFamily: 'Nunito, sans-serif',
+                fontSize: 16,
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Back to Search
             </button>
           </div>
         </div>
