@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { IconX, IconCamera, IconSearch, IconPlus, IconClock } from '../lib/icons';
 import { useItems } from '../hooks/useItems';
+import { useHousehold } from '../hooks/useHousehold';
 import { searchGroceryDatabase } from '../lib/groceryData';
+import { getPriceWithGatekeeper } from '../lib/priceLookup';
 
-// Fast debounce hook â 120ms for near-instant feel with local search
+// Fast debounce hook - 120ms for near-instant feel with local search
 function useDebounce(value, delay) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -14,13 +16,18 @@ function useDebounce(value, delay) {
 }
 
 export default function AddItemModal({ open, onClose, onOpenCamera, initialProduct }) {
-  const { addItem, getSuggestedStore, getEstimatedPrice, priceMemory } = useItems();
+  const { addItem, getSuggestedStore, getEstimatedPrice, priceMemory, fetchPriceMemory } = useItems();
+  const { household } = useHousehold();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [selectedName, setSelectedName] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedWeight, setSelectedWeight] = useState('');
   const [store, setStore] = useState(null);
   const [step, setStep] = useState('search'); // 'search' | 'store'
+  const [checkingPrice, setCheckingPrice] = useState(false);
   const inputRef = useRef();
+
   const debouncedQuery = useDebounce(query, 120);
 
   // Pre-index household history for fast search
@@ -33,10 +40,12 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
     }));
   }, [priceMemory]);
 
-  // Handle initial product from camera/barcode
+  // Handle initial product from camera (Smart Add)
   useEffect(() => {
     if (open && initialProduct) {
-      setSelectedName(initialProduct.name);
+      setSelectedName(initialProduct.name || '');
+      setSelectedBrand(initialProduct.brand || '');
+      setSelectedWeight(initialProduct.volume_weight || initialProduct.weight || '');
       setStore(initialProduct.suggested_store || getSuggestedStore(initialProduct.name));
       setStep('store');
       setQuery('');
@@ -44,9 +53,12 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
     } else if (open) {
       setQuery('');
       setSelectedName('');
+      setSelectedBrand('');
+      setSelectedWeight('');
       setStore(null);
       setStep('search');
       setSuggestions([]);
+      setCheckingPrice(false);
       setTimeout(() => inputRef.current?.focus(), 200);
     }
   }, [open, initialProduct]);
@@ -62,7 +74,7 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
     const results = [];
     const seen = new Set();
 
-    // 1. Household history â highest priority (items you've bought before)
+    // 1. Household history - highest priority (items you've bought before)
     for (const item of historyIndex) {
       if (item.lower.includes(lower)) {
         results.push(item);
@@ -71,7 +83,7 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
       if (results.length >= 3) break;
     }
 
-    // 2. Curated Australian grocery database â instant, no API
+    // 2. Curated Australian grocery database - instant, no API
     const dbResults = searchGroceryDatabase(debouncedQuery, 8);
     for (const r of dbResults) {
       const rLower = r.name.toLowerCase();
@@ -91,16 +103,42 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
 
   const selectProduct = useCallback((name) => {
     setSelectedName(name);
+    setSelectedBrand('');
+    setSelectedWeight('');
     const suggested = getSuggestedStore(name);
     setStore(suggested);
     setStep('store');
   }, [getSuggestedStore]);
 
   const handleAddItem = useCallback(async () => {
-    if (!selectedName || !store) return;
-    await addItem(selectedName, store);
+    if (!selectedName || !store || checkingPrice) return;
+
+    setCheckingPrice(true);
+    let resolvedPrice = null;
+
+    try {
+      const result = await getPriceWithGatekeeper({
+        name: selectedName,
+        brand: selectedBrand,
+        weight: selectedWeight,
+        store,
+        householdId: household?.id
+      });
+      if (result && typeof result.price === 'number' && result.price > 0) {
+        resolvedPrice = result.price;
+      }
+      // If gatekeeper wrote a fresh SerpApi result, refresh local cache view
+      if (result && result.source === 'serpapi-fresh') {
+        fetchPriceMemory?.();
+      }
+    } catch (err) {
+      console.warn('Price gatekeeper failed, falling back to estimate:', err && err.message);
+    }
+
+    await addItem(selectedName, store, resolvedPrice);
+    setCheckingPrice(false);
     onClose();
-  }, [selectedName, store, addItem, onClose]);
+  }, [selectedName, selectedBrand, selectedWeight, store, checkingPrice, household, addItem, onClose, fetchPriceMemory]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && query.trim()) {
@@ -202,7 +240,7 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
 
             {suggestions.length === 0 && query.length === 0 && (
               <div className="suggestions-empty">
-                <div className="empty-icon">ð</div>
+                <div className="empty-icon">&#128722;</div>
                 <div className="empty-title">Search or scan</div>
                 <div className="empty-subtitle">
                   Type a product name or snap a photo with Smart Add
@@ -232,11 +270,11 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
           </div>
         </div>
       ) : (
-        /* STORE PICKER â step 2 */
+        /* STORE PICKER - step 2 */
         <div className="modal-inner">
           {/* Header */}
           <div className="modal-header">
-            <button className="btn-back" onClick={() => { setStep('search'); setSelectedName(''); }}>
+            <button className="btn-back" onClick={() => { setStep('search'); setSelectedName(''); setSelectedBrand(''); setSelectedWeight(''); }}>
               &#8592; Back
             </button>
             <button className="btn-icon-close" onClick={onClose}>
@@ -266,7 +304,6 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
                 <span className="store-suggested-tag">Suggested</span>
               )}
             </button>
-
             <button
               className={`store-pick-btn store-woolworths ${store === 'woolworths' ? 'active' : ''}`}
               onClick={() => setStore('woolworths')}
@@ -281,11 +318,15 @@ export default function AddItemModal({ open, onClose, onOpenCamera, initialProdu
           {/* Bottom action */}
           <div className="store-pick-actions">
             <button
-              className={`btn-add-final ${store ? 'active' : ''}`}
+              className={`btn-add-final ${store && !checkingPrice ? 'active' : ''}`}
               onClick={handleAddItem}
-              disabled={!store}
+              disabled={!store || checkingPrice}
             >
-              {store ? `Add to ${store === 'aldi' ? 'Aldi' : 'Woolworths'} List` : 'Pick a store above'}
+              {checkingPrice
+                ? 'Checking price...'
+                : store
+                  ? `Add to ${store === 'aldi' ? 'Aldi' : 'Woolworths'} List`
+                  : 'Pick a store above'}
             </button>
           </div>
         </div>
