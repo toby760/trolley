@@ -20,6 +20,7 @@ export function useItems() {
       .select('*')
       .eq('household_id', household.id)
       .eq('week_id', currentWeek.id)
+      .is('trip_id', null)
       .order('sort_order', { ascending: true }).order('created_at', { ascending: true });
     if (!error && data) setItems(data);
     setLoading(false);
@@ -211,6 +212,51 @@ export function useItems() {
       .in('id', itemIds);
   }, []);
 
+  const finishShop = useCallback(async (store) => {
+    if (!household || !currentWeek) return { error: 'no household/week' };
+    const storeItems = items.filter(i => i.store === store && i.trip_id == null);
+    const ticked = storeItems.filter(i => i.status === 'done');
+    const unticked = storeItems.filter(i => i.status === 'active');
+    if (ticked.length === 0 && unticked.length === 0) return { error: 'no items' };
+    // 1. Create the pending trip
+    const { data: trip, error: tripErr } = await supabase
+      .from('shop_trips')
+      .insert({
+        household_id: household.id,
+        week_id: currentWeek.id,
+        store,
+        status: 'pending'
+      })
+      .select()
+      .single();
+    if (tripErr) return { error: tripErr };
+    // 2. Assign ticked items to the trip (they disappear from active list)
+    if (ticked.length > 0) {
+      await supabase
+        .from('items')
+        .update({ trip_id: trip.id, updated_at: new Date().toISOString() })
+        .in('id', ticked.map(i => i.id));
+    }
+    // 3. If finishing Aldi, roll unticked items to Woolworths
+    if (store === 'aldi' && unticked.length > 0) {
+      await supabase
+        .from('items')
+        .update({ store: 'woolworths', updated_at: new Date().toISOString() })
+        .in('id', unticked.map(i => i.id));
+    }
+    // Optimistic local removal of ticked items + rolled items
+    setItems(prev => prev.filter(i => {
+      if (ticked.find(t => t.id === i.id)) return false;
+      return true;
+    }).map(i => {
+      if (store === 'aldi' && unticked.find(u => u.id === i.id)) {
+        return { ...i, store: 'woolworths' };
+      }
+      return i;
+    }));
+    return { trip };
+  }, [household, currentWeek, items]);
+
   const getSuggestedStore = useCallback((productName) => {
     return suggestStore(productName, priceMemory);
   }, [priceMemory]);
@@ -261,7 +307,8 @@ export function useItems() {
     aldiTotal, woolworthsTotal, combinedTotal,
     activeCount, doneCount, priceMemory,
     addItem, toggleItem, deleteItem, updateItem, reorderItem,
-    moveToWoolworths, getSuggestedStore, getEstimatedPrice,
+    moveToWoolworths,
+    finishShop, getSuggestedStore, getEstimatedPrice,
     fetchItems, fetchPriceMemory
   };
 }
