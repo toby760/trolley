@@ -210,3 +210,28 @@ CREATE TRIGGER trg_update_staples
   AFTER INSERT ON items
   FOR EACH ROW
   EXECUTE FUNCTION update_staple_frequency();
+
+
+-- ============================================
+-- 8. SHOP TRIPS (Fix 3)
+-- ============================================
+CREATE TABLE IF NOT EXISTS shop_trips (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  week_id UUID REFERENCES weeks(id) ON DELETE SET NULL,
+  store TEXT NOT NULL CHECK (store IN ('aldi','woolworths')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','reconciled')),
+  receipt_id UUID REFERENCES receipts(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  reconciled_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_shop_trips_household ON shop_trips(household_id);
+CREATE INDEX IF NOT EXISTS idx_shop_trips_week ON shop_trips(week_id);
+CREATE INDEX IF NOT EXISTS idx_shop_trips_status ON shop_trips(status);
+ALTER TABLE shop_trips ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all on shop_trips" ON shop_trips;
+CREATE POLICY "Allow all on shop_trips" ON shop_trips FOR ALL USING (true) WITH CHECK (true);
+
+-- Add trip_id column to items
+ALTER TABLE items ADD COLUMN IF NOT EXISTS trip_id UUID REFERENCES shop_trips(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_items_trip ON items(trip_id);
