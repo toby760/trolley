@@ -10,7 +10,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from 
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
 export default function ShoppingList({ onOpenAddItem }) {
-  const { aldiItems, woolworthsItems, aldiTotal, woolworthsTotal, toggleItem, deleteItem, updateItem, moveToWoolworths, reorderItem } = useItems();
+  const { aldiItems, woolworthsItems, aldiTotal, woolworthsTotal, toggleItem, deleteItem, updateItem, moveToWoolworths, reorderItem, finishShop } = useItems();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 6 } })
   );
@@ -38,21 +38,23 @@ export default function ShoppingList({ onOpenAddItem }) {
 
   const handleFinishAldi = async () => {
     setFinishingAldi(true);
-    const unchecked = aldiItems.filter(i => i.status === 'active');
-    if (unchecked.length > 0) {
-      await moveToWoolworths(unchecked.map(i => i.id));
-    }
+    const result = await finishShop('aldi');
     setFinishingAldi(false);
-    setShowReceipt('aldi');
+    if (result && !result.error) {
+      setShowReceipt('aldi');
+    }
   };
 
   const handleFinishWoolworths = async () => {
     setFinishingWoolworths(true);
+    const result = await finishShop('woolworths');
     if (currentWeek) {
       await supabase.from('weeks').update({ completed: true }).eq('id', currentWeek.id);
     }
     setFinishingWoolworths(false);
-    setShowReceipt('woolworths');
+    if (result && !result.error) {
+      setShowReceipt('woolworths');
+    }
   };
 
   const aldiActive = aldiItems.filter(i => i.status === 'active');
