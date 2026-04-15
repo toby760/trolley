@@ -1,5 +1,5 @@
 -- ============================================
--- TROLLEY — Supabase Database Schema
+-- TROLLEY â Supabase Database Schema
 -- Run this in your Supabase SQL Editor
 -- ============================================
 
@@ -48,6 +48,7 @@ CREATE TABLE items (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'done', 'moved')),
   added_by TEXT NOT NULL CHECK (added_by IN ('T', 'O')),
   estimated_price NUMERIC(8,2) DEFAULT 0,
+  quantity INTEGER NOT NULL DEFAULT 1,
   category TEXT DEFAULT 'general',
   barcode TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -63,6 +64,7 @@ CREATE INDEX idx_items_sort ON items(household_id, week_id, store, sort_order);
 
 -- Idempotent migration for existing deployments
 ALTER TABLE items ADD COLUMN IF NOT EXISTS sort_order BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1;
 
 -- ============================================
 -- 4. PRICE MEMORY
