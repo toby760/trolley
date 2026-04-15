@@ -10,7 +10,7 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit, sortabl
   const lineTotal = price * qty;
   const hasPrice = price > 0;
 
-  // Drag-and-drop wiring via @dnd-kit â only active items are draggable.
+  // Drag-and-drop wiring via @dnd-kit Ã¢ÂÂ only active items are draggable.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: !sortable });
 
@@ -20,7 +20,7 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit, sortabl
         transition,
         opacity: isDragging ? 0.6 : 1,
         zIndex: isDragging ? 10 : 'auto',
-        touchAction: 'none',
+        touchAction: 'manipulation',
       }
     : undefined;
 
@@ -58,7 +58,7 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit, sortabl
             </span>
           ) : (
             <span className="item-price item-price-checking">
-              ð­ Checking price...
+              Ã°ÂÂÂ­ Checking price...
             </span>
           )}
         </div>
