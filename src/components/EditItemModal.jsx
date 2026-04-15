@@ -5,12 +5,14 @@ export default function EditItemModal({ item, open, onClose, onSave }) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [store, setStore] = useState('aldi');
+  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     if (item) {
       setName(item.name || '');
       setPrice(item.estimated_price?.toString() || '');
       setStore(item.store || 'aldi');
+      setQuantity(item.quantity || 1);
     }
   }, [item]);
 
@@ -18,7 +20,8 @@ export default function EditItemModal({ item, open, onClose, onSave }) {
     onSave(item.id, {
       name: name.trim(),
       estimated_price: parseFloat(price) || 0,
-      store
+      store,
+      quantity
     });
     onClose();
   };
@@ -79,6 +82,39 @@ export default function EditItemModal({ item, open, onClose, onSave }) {
           >
             Woolworths
           </button>
+        </div>
+
+        {/* Quantity */}
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-300)', display: 'block', marginBottom: 6 }}>
+          Quantity
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+          <button
+            onClick={() => setQuantity(q => Math.max(1, q - 1))}
+            disabled={quantity <= 1}
+            style={{
+              width: 40, height: 40, borderRadius: '50%',
+              border: 'none',
+              background: quantity <= 1 ? 'var(--green-700)' : 'var(--green-600)',
+              color: quantity <= 1 ? 'var(--gray-500)' : 'var(--white)',
+              fontSize: 20, fontWeight: 900, cursor: quantity <= 1 ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'Nunito, sans-serif'
+            }}
+          >\u2212</button>
+          <span style={{ fontSize: 22, fontWeight: 900, minWidth: 28, textAlign: 'center' }}>{quantity}</span>
+          <button
+            onClick={() => setQuantity(q => Math.min(99, q + 1))}
+            style={{
+              width: 40, height: 40, borderRadius: '50%',
+              border: 'none',
+              background: 'var(--green-600)',
+              color: 'var(--white)',
+              fontSize: 20, fontWeight: 900, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'Nunito, sans-serif'
+            }}
+          >+</button>
         </div>
 
         <button className="btn btn-primary btn-full" onClick={handleSave}>
