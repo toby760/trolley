@@ -6,9 +6,30 @@ import ShoppingItem from '../components/ShoppingItem';
 import EditItemModal from '../components/EditItemModal';
 import ReceiptScanner from '../components/ReceiptScanner';
 import { IconPlus } from '../lib/icons';
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
 export default function ShoppingList({ onOpenAddItem }) {
-  const { aldiItems, woolworthsItems, aldiTotal, woolworthsTotal, toggleItem, deleteItem, updateItem, moveToWoolworths } = useItems();
+  const { aldiItems, woolworthsItems, aldiTotal, woolworthsTotal, toggleItem, deleteItem, updateItem, moveToWoolworths, reorderItem } = useItems();
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 6 } })
+  );
+  const handleDragEndAldi = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const ids = aldiActive.map(i => i.id);
+    const oldIdx = ids.indexOf(active.id);
+    const newIdx = ids.indexOf(over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    reorderItem('aldi', arrayMove(ids, oldIdx, newIdx));
+  };
+  const handleDragEndWool = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const ids = woolActive.map(i => i.id);
+    const oldIdx = ids.indexOf(active.id);
+    const newIdx = ids.indexOf(over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    reorderItem('woolworths', arrayMove(ids, oldIdx, newIdx));
+  };
   const { currentWeek } = useHousehold();
   const [editingItem, setEditingItem] = useState(null);
   const [showReceipt, setShowReceipt] = useState(null);
@@ -58,17 +79,22 @@ export default function ShoppingList({ onOpenAddItem }) {
         </div>
 
         {aldiActive.length > 0 && (
-          <div className="store-items-list">
-            {aldiActive.map(item => (
-              <ShoppingItem
-                key={item.id}
-                item={item}
-                onToggle={toggleItem}
-                onDelete={deleteItem}
-                onEdit={setEditingItem}
-              />
-            ))}
-          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndAldi}>
+            <SortableContext items={aldiActive.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              <div className="store-items-list">
+                {aldiActive.map(item => (
+                  <ShoppingItem
+                    key={item.id}
+                    item={item}
+                    onToggle={toggleItem}
+                    onDelete={deleteItem}
+                    onEdit={setEditingItem}
+                    sortable
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {aldiDone.length > 0 && (
@@ -119,17 +145,22 @@ export default function ShoppingList({ onOpenAddItem }) {
         </div>
 
         {woolActive.length > 0 && (
-          <div className="store-items-list">
-            {woolActive.map(item => (
-              <ShoppingItem
-                key={item.id}
-                item={item}
-                onToggle={toggleItem}
-                onDelete={deleteItem}
-                onEdit={setEditingItem}
-              />
-            ))}
-          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndWool}>
+            <SortableContext items={woolActive.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              <div className="store-items-list">
+                {woolActive.map(item => (
+                  <ShoppingItem
+                    key={item.id}
+                    item={item}
+                    onToggle={toggleItem}
+                    onDelete={deleteItem}
+                    onEdit={setEditingItem}
+                    sortable
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {woolDone.length > 0 && (
