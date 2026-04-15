@@ -6,13 +6,14 @@ import ShoppingItem from '../components/ShoppingItem';
 import EditItemModal from '../components/EditItemModal';
 import ReceiptScanner from '../components/ReceiptScanner';
 import { IconPlus } from '../lib/icons';
-import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
 export default function ShoppingList({ onOpenAddItem }) {
   const { aldiItems, woolworthsItems, aldiTotal, woolworthsTotal, toggleItem, deleteItem, updateItem, moveToWoolworths, reorderItem, finishShop } = useItems();
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 6 } })
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } })
   );
   const handleDragEndAldi = ({ active, over }) => {
     if (!over || active.id === over.id) return;
