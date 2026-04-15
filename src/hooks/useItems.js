@@ -105,7 +105,7 @@ export function useItems() {
   //              brand + size which justifies the credit.
   const addItem = useCallback(async (name, store, options = {}) => {
     if (!household || !currentWeek || !currentUser) return null;
-    const { brand = '', weight = '', mode = 'typed' } = options || {};
+    const { brand = '', weight = '', mode = 'typed', quantity = 1 } = options || {};
 
     // Insert row immediately with null price so the modal can close.
     const { data, error } = await supabase
@@ -118,7 +118,8 @@ export function useItems() {
         added_by: currentUser,
         estimated_price: null,
         status: 'active',
-        sort_order: Date.now()
+        sort_order: Date.now(),
+        quantity: quantity
       })
       .select()
       .single();
@@ -268,9 +269,9 @@ export function useItems() {
   const aldiItems = items.filter(i => i.store === 'aldi');
   const woolworthsItems = items.filter(i => i.store === 'woolworths');
   const aldiTotal = aldiItems.reduce((sum, i) =>
-    sum + (parseFloat(i.estimated_price) || 0), 0);
+    sum + (parseFloat(i.estimated_price) || 0) * (i.quantity || 1), 0);
   const woolworthsTotal = woolworthsItems.reduce((sum, i) =>
-    sum + (parseFloat(i.estimated_price) || 0), 0);
+    sum + (parseFloat(i.estimated_price) || 0) * (i.quantity || 1), 0);
   const combinedTotal = aldiTotal + woolworthsTotal;
   const activeCount = items.filter(i => i.status === 'active').length;
   const doneCount = items.filter(i => i.status === 'done').length;
