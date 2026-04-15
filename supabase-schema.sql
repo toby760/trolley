@@ -51,6 +51,7 @@ CREATE TABLE items (
   category TEXT DEFAULT 'general',
   barcode TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  sort_order INTEGER NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -58,6 +59,10 @@ CREATE INDEX idx_items_household ON items(household_id);
 CREATE INDEX idx_items_week ON items(week_id);
 CREATE INDEX idx_items_status ON items(status);
 CREATE INDEX idx_items_store ON items(store);
+CREATE INDEX idx_items_sort ON items(household_id, week_id, store, sort_order);
+
+-- Idempotent migration for existing deployments
+ALTER TABLE items ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
 
 -- ============================================
 -- 4. PRICE MEMORY
