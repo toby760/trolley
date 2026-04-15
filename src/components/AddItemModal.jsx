@@ -43,6 +43,7 @@ export default function AddItemModal({
   const [selectedBrand, setSelectedBrand] = useState('');
   const [selectedWeight, setSelectedWeight] = useState('');
   const [store, setStore] = useState(null);
+  const [quantity, setQuantity] = useState(1);
   const [step, setStep] = useState('search'); // 'search' | 'store'
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const inputRef = useRef();
@@ -59,6 +60,7 @@ export default function AddItemModal({
       setSelectedBrand('');
       setSelectedWeight('');
       setStore(null);
+      setQuantity(1);
       setStep('search');
       setSuggestions([]);
       // If we opened from Smart Photo, skip the search step and go straight
@@ -200,7 +202,8 @@ export default function AddItemModal({
     addItem(selectedName, store, {
       brand: selectedBrand,
       weight: selectedWeight,
-      mode: fromPhoto ? 'photo' : 'typed'
+      mode: fromPhoto ? 'photo' : 'typed',
+      quantity
     });
     onClose();
   };
@@ -328,7 +331,7 @@ export default function AddItemModal({
                           fontSize: 13, color: 'var(--green-400)',
                           fontWeight: 600, marginTop: 2
                         }}>
-                          Previously bought{s.price ? ` · $${s.price.toFixed(2)}` : ''}
+                          Previously bought{s.price ? ` Â· $${s.price.toFixed(2)}` : ''}
                         </div>
                       )}
                     </div>
@@ -397,12 +400,55 @@ export default function AddItemModal({
                 fontSize: 15, fontWeight: 600,
                 color: 'var(--green-400)', marginTop: 6
               }}>
-                Est. ${getEstimatedPrice(selectedName, store || 'aldi').toFixed(2)}
+                Est. ${getEstimatedPrice(selectedName, store || 'aldi').toFixed(2)} ea${quantity > 1 ? ` \u00d7 ${quantity} = ${(getEstimatedPrice(selectedName, store || 'aldi') * quantity).toFixed(2)}` : ''}
               </div>
             </div>
           </div>
 
-          {/* Store buttons */}
+          {/* Quantity stepper */}
+            <div style={{ padding: '0 20px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--green-800)',
+                borderRadius: 16,
+                padding: '12px 20px',
+                border: '1px solid rgba(255,255,255,0.08)'
+              }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-300)' }}>Quantity</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <button
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                    disabled={quantity <= 1}
+                    style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      border: 'none',
+                      background: quantity <= 1 ? 'var(--green-700)' : 'var(--green-600)',
+                      color: quantity <= 1 ? 'var(--gray-500)' : 'var(--white)',
+                      fontSize: 22, fontWeight: 900, cursor: quantity <= 1 ? 'default' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'Nunito, sans-serif'
+                    }}
+                  >\u2212</button>
+                  <span style={{ fontSize: 24, fontWeight: 900, minWidth: 32, textAlign: 'center' }}>{quantity}</span>
+                  <button
+                    onClick={() => setQuantity(q => Math.min(99, q + 1))}
+                    style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      border: 'none',
+                      background: 'var(--green-600)',
+                      color: 'var(--white)',
+                      fontSize: 22, fontWeight: 900, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'Nunito, sans-serif'
+                    }}
+                  >+</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Store buttons */}
           <div style={{
             flex: 1, display: 'flex', flexDirection: 'column',
             gap: 16, padding: '24px 20px', justifyContent: 'center'
