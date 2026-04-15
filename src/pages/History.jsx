@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useWeekHistory } from '../hooks/useWeekHistory';
-import { IconChevronRight, IconTrendingUp } from '../lib/icons';
+import { useShopTrips } from '../hooks/useShopTrips';
+import { IconChevronRight, IconTrendingUp, IconTrash } from '../lib/icons';
 
 export default function History() {
   const { weeks, chartData, loading, getWeekItems } = useWeekHistory();
+  const { pendingTrips, tripItems, deleteTripItem, cancelTrip } = useShopTrips();
   const [expandedWeek, setExpandedWeek] = useState(null);
   const [weekItems, setWeekItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -77,6 +79,67 @@ export default function History() {
               Woolworths
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Pending trips (awaiting receipt) */}
+      {pendingTrips.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-300)', marginBottom: 8, letterSpacing: 0.5 }}>
+            PENDING RECEIPT ({pendingTrips.length})
+          </div>
+          {pendingTrips.map(trip => {
+            const items = tripItems[trip.id] || [];
+            const total = items.reduce((s, i) => s + (parseFloat(i.estimated_price) || 0), 0);
+            return (
+              <div key={trip.id} className="card" style={{ marginBottom: 12, padding: 12, border: '1px solid var(--amber-500, #f59e0b)', borderLeft: '3px solid var(--amber-500, #f59e0b)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className={`store-name-badge ${trip.store}`}>{trip.store === 'aldi' ? 'ALDI' : 'WOOLWORTHS'}</span>
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+                      {new Date(trip.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>${total.toFixed(2)} est.</div>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Cancel this trip? Items will return to the shopping list.')) cancelTrip(trip.id);
+                      }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--gray-400)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}
+                    >cancel</button>
+                  </div>
+                </div>
+                {items.length === 0 ? (
+                  <p style={{ fontSize: 12, color: 'var(--gray-400)', margin: 0 }}>(no items in this trip)</p>
+                ) : (
+                  <div>
+                    {items.map(item => (
+                      <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 13, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <span className={`user-badge ${item.added_by === 'T' ? 'toby' : 'orla'}`} style={{ width: 18, height: 18, fontSize: 10 }}>{item.added_by}</span>
+                          <span style={{ fontWeight: 600 }}>{item.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 700, color: 'var(--green-300)' }}>${(parseFloat(item.estimated_price) || 0).toFixed(2)}</span>
+                          <button
+                            onClick={() => deleteTripItem(item.id)}
+                            aria-label="Delete item"
+                            style={{ background: 'transparent', border: 'none', color: 'var(--red-400)', cursor: 'pointer', padding: 4, display: 'inline-flex', alignItems: 'center' }}
+                          >
+                            {typeof IconTrash === 'function' ? <IconTrash size={14} /> : <span style={{ fontSize: 12 }}>✕</span>}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p style={{ fontSize: 11, color: 'var(--gray-500, #6b7280)', marginTop: 8, marginBottom: 0, fontStyle: 'italic' }}>
+                  Awaiting receipt · scan receipt from the shopping list tab to reconcile.
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
 
