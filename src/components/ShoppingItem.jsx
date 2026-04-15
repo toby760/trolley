@@ -6,9 +6,11 @@ import { IconCheck, IconTrash, IconEdit } from '../lib/icons';
 export default function ShoppingItem({ item, onToggle, onDelete, onEdit, sortable = false }) {
   const isDone = item.status === 'done';
   const price = parseFloat(item.estimated_price || 0);
+  const qty = item.quantity || 1;
+  const lineTotal = price * qty;
   const hasPrice = price > 0;
 
-  // Drag-and-drop wiring via @dnd-kit — only active items are draggable.
+  // Drag-and-drop wiring via @dnd-kit â only active items are draggable.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: !sortable });
 
@@ -45,18 +47,18 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit, sortabl
 
       {/* Item info */}
       <div className="item-info">
-        <div className="item-name">{item.name}</div>
+        <div className="item-name">{item.name}{qty > 1 && <span style={{ color: 'var(--green-400)', fontWeight: 800, fontSize: 13, marginLeft: 6 }}>{'\u00d7'}{qty}</span>}</div>
         <div className="item-meta">
           <span className={`item-user-badge ${item.added_by === 'T' ? 'toby' : 'orla'}`}>
             {item.added_by}
           </span>
           {hasPrice ? (
             <span className="item-price">
-              ${price.toFixed(2)}
+              ${lineTotal.toFixed(2)}
             </span>
           ) : (
             <span className="item-price item-price-checking">
-              💭 Checking price...
+              ð­ Checking price...
             </span>
           )}
         </div>
