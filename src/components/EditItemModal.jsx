@@ -101,7 +101,7 @@ export default function EditItemModal({ item, open, onClose, onSave }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: 'Nunito, sans-serif'
             }}
-          >\u2212</button>
+          >−</button>
           <span style={{ fontSize: 22, fontWeight: 900, minWidth: 28, textAlign: 'center' }}>{quantity}</span>
           <button
             onClick={() => setQuantity(q => Math.min(99, q + 1))}
