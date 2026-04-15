@@ -2,11 +2,13 @@ import React, { useRef, useState } from 'react';
 import { IconX, IconCamera } from '../lib/icons';
 import { supabase } from '../lib/supabase';
 import { useHousehold } from '../hooks/useHousehold';
+import { matchItems } from '../lib/matcher';
 
 export default function ReceiptScanner({ open, onClose, store, onComplete }) {
   const { household, currentWeek } = useHousehold();
   const fileInputRef = useRef(null);
   const [processing, setProcessing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
@@ -22,7 +24,6 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
     setResult(null);
 
     try {
-      // Convert file to base64
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -30,25 +31,17 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
         reader.readAsDataURL(file);
       });
 
-      // Call Gemini via our serverless API
       const res = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: base64, mode: 'receipt', store })
       });
 
-      if (!res.ok) {
-        throw new Error('API error');
-      }
+      if (!res.ok) throw new Error('API error');
 
       const data = await res.json();
-      // data = { items: [{ item_name, price, quantity }], total }
+      if (!data.items || !Array.isArray(data.items)) throw new Error('Invalid response');
 
-      if (!data.items || !Array.isArray(data.items)) {
-        throw new Error('Invalid response');
-      }
-
-      // Normalise items to match expected format
       const items = data.items.map(item => ({
         name: item.item_name || item.name || 'Unknown item',
         price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
@@ -59,50 +52,128 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
         ? data.total
         : items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
 
-      const parsed = { items, total };
-      setResult(parsed);
-
-      // Save to Supabase
-      if (household && currentWeek) {
-        await supabase.from('receipts').insert({
-          household_id: household.id,
-          week_id: currentWeek.id,
-          store: store,
-          total: parsed.total,
-          items_json: parsed.items,
-          raw_ocr_text: JSON.stringify(data)
-        });
-
-        // Update week actual spend
-        const field = store === 'aldi' ? 'aldi_actual' : 'woolworths_actual';
-        await supabase
-          .from('weeks')
-          .update({ [field]: parsed.total })
-          .eq('id', currentWeek.id);
-
-        // Update price memory for every item
-        for (const item of parsed.items) {
-          if (item.name && item.price > 0) {
-            await supabase.from('price_memory').upsert({
-              household_id: household.id,
-              product_name: item.name,
-              store: store,
-              last_known_price: item.price,
-              purchase_count: 1,
-              updated_at: new Date().toISOString()
-            }, {
-              onConflict: 'household_id,product_name,store'
-            });
-          }
-        }
-      }
+      setResult({ items, total, raw: data });
     } catch (e) {
       console.error('Receipt scan error:', e);
       setError('Failed to read receipt. Try taking a clearer photo with good lighting.');
     }
     setProcessing(false);
   };
+  const handleSave = async () => {
+    if (!result) { onClose(); return; }
+    if (!household || !currentWeek) { onComplete?.(result); onClose(); return; }
+    setSaving(true);
+    try {
+      // 1. Find pending shop trip for this store/week
+      const { data: trips } = await supabase
+        .from('shop_trips')
+        .select('id')
+        .eq('household_id', household.id)
+        .eq('week_id', currentWeek.id)
+        .eq('store', store)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const trip = trips && trips[0];
 
+      // 2. Fetch items attached to this trip
+      let tripItems = [];
+      if (trip) {
+        const { data: ti } = await supabase
+          .from('items')
+          .select('id, name')
+          .eq('trip_id', trip.id);
+        tripItems = ti || [];
+      }
+
+      // 3. Fuzzy-match list items vs receipt lines
+      const { matched, unmatchedReceipt } = matchItems(tripItems, result.items, 0.3);
+
+      // 4. Save receipt row (linked to trip if present)
+      const { data: rReceipt } = await supabase.from('receipts').insert({
+        household_id: household.id,
+        week_id: currentWeek.id,
+        trip_id: trip ? trip.id : null,
+        store: store,
+        total: result.total,
+        items_json: result.items,
+        raw_ocr_text: JSON.stringify(result.raw || {})
+      }).select().single();
+
+      // 5. Matched items: set actual_price, receipt_name, write alias + price_memory
+      for (const m of matched) {
+        await supabase
+          .from('items')
+          .update({ actual_price: m.receipt.price, receipt_name: m.receipt.name })
+          .eq('id', m.item.id);
+
+        await supabase.from('product_aliases').upsert({
+          household_id: household.id,
+          alias: m.item.name,
+          receipt_name: m.receipt.name,
+          store: store,
+          last_price: m.receipt.price,
+          match_count: 1,
+          last_seen_at: new Date().toISOString()
+        }, { onConflict: 'household_id,alias,receipt_name,store' });
+
+        // Seed price_memory under BOTH the user's name and the receipt name
+        await supabase.from('price_memory').upsert({
+          household_id: household.id,
+          product_name: m.item.name,
+          store: store,
+          last_known_price: m.receipt.price,
+          purchase_count: 1,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'household_id,product_name,store' });
+
+        await supabase.from('price_memory').upsert({
+          household_id: household.id,
+          product_name: m.receipt.name,
+          store: store,
+          last_known_price: m.receipt.price,
+          purchase_count: 1,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'household_id,product_name,store' });
+      }
+
+      // 6. Unmatched receipt lines: still index into price_memory
+      for (const r of unmatchedReceipt) {
+        if (r.name && r.price > 0) {
+          await supabase.from('price_memory').upsert({
+            household_id: household.id,
+            product_name: r.name,
+            store: store,
+            last_known_price: r.price,
+            purchase_count: 1,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'household_id,product_name,store' });
+        }
+      }
+
+      // 7. Mark the trip reconciled
+      if (trip && rReceipt) {
+        await supabase
+          .from('shop_trips')
+          .update({ status: 'reconciled', reconciled_at: new Date().toISOString(), receipt_id: rReceipt.id })
+          .eq('id', trip.id);
+      }
+
+      // 8. Update week actual spend
+      const field = store === 'aldi' ? 'aldi_actual' : 'woolworths_actual';
+      await supabase
+        .from('weeks')
+        .update({ [field]: result.total })
+        .eq('id', currentWeek.id);
+
+      onComplete?.(result);
+      onClose();
+    } catch (e) {
+      console.error('Receipt save error:', e);
+      setError('Failed to save receipt. Please try again.');
+    }
+    setSaving(false);
+  };
   if (!open) return null;
 
   return (
@@ -188,7 +259,6 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
             </button>
           </div>
         )}
-
         {result && (
           <div className="animate-slide-up">
             <div style={{
@@ -251,9 +321,10 @@ export default function ReceiptScanner({ open, onClose, store, onComplete }) {
 
             <button
               className="btn btn-primary btn-full"
-              onClick={() => { onComplete?.(result); onClose(); }}
+              onClick={handleSave}
+              disabled={saving}
             >
-              Save Receipt
+              {saving ? 'Saving...' : 'Save Receipt'}
             </button>
           </div>
         )}
