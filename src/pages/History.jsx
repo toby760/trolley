@@ -27,7 +27,7 @@ export default function History() {
     const date = new Date(dateStr);
     const end = new Date(date);
     end.setDate(end.getDate() + 6);
-    return `${date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} â ${end.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`;
+    return `${date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} Ã¢ÂÂ ${end.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`;
   };
 
   return (
@@ -90,7 +90,7 @@ export default function History() {
           </div>
           {pendingTrips.map(trip => {
             const items = tripItems[trip.id] || [];
-            const total = items.reduce((s, i) => s + (parseFloat(i.estimated_price) || 0), 0);
+            const total = items.reduce((s, i) => s + ((parseFloat(i.estimated_price) || 0) * (i.quantity || 1)), 0);
             return (
               <div key={trip.id} className="card" style={{ marginBottom: 12, padding: 12, border: '1px solid var(--amber-500, #f59e0b)', borderLeft: '3px solid var(--amber-500, #f59e0b)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -121,13 +121,13 @@ export default function History() {
                           <span style={{ fontWeight: 600 }}>{item.name}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontWeight: 700, color: 'var(--green-300)' }}>${(parseFloat(item.estimated_price) || 0).toFixed(2)}</span>
+                          <span style={{ fontWeight: 700, color: 'var(--green-300)' }}>${((parseFloat(item.estimated_price) || 0) * (item.quantity || 1)).toFixed(2)}</span>
                           <button
                             onClick={() => deleteTripItem(item.id)}
                             aria-label="Delete item"
                             style={{ background: 'transparent', border: 'none', color: 'var(--red-400)', cursor: 'pointer', padding: 4, display: 'inline-flex', alignItems: 'center' }}
                           >
-                            {typeof IconTrash === 'function' ? <IconTrash size={14} /> : <span style={{ fontSize: 12 }}>✕</span>}
+                            {typeof IconTrash === 'function' ? <IconTrash size={14} /> : <span style={{ fontSize: 12 }}>â</span>}
                           </button>
                         </div>
                       </div>
@@ -135,7 +135,7 @@ export default function History() {
                   </div>
                 )}
                 <p style={{ fontSize: 11, color: 'var(--gray-500, #6b7280)', marginTop: 8, marginBottom: 0, fontStyle: 'italic' }}>
-                  Awaiting receipt · scan receipt from the shopping list tab to reconcile.
+                  Awaiting receipt Â· scan receipt from the shopping list tab to reconcile.
                 </p>
               </div>
             );
@@ -221,7 +221,7 @@ export default function History() {
                               {item.store === 'aldi' ? 'A' : 'W'}
                             </span>
                             <span style={{ fontWeight: 700, color: 'var(--green-300)' }}>
-                              ${parseFloat(item.estimated_price || 0).toFixed(2)}
+                              ${(parseFloat(item.estimated_price || 0) * (item.quantity || 1)).toFixed(2)}
                             </span>
                           </div>
                         </div>
