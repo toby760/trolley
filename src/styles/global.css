@@ -1612,3 +1612,14 @@ body {
   font-weight: 700;
   font-size: 13px;
 }
+
+
+/* Drag-to-reorder (Fix 2) */
+.shopping-item.is-sortable {
+  touch-action: manipulation;
+}
+.shopping-item.is-dragging {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  cursor: grabbing;
+  z-index: 10;
+}
