@@ -18,7 +18,7 @@ export default function ShoppingItem({ item, onToggle, onDelete, onEdit, sortabl
         transition,
         opacity: isDragging ? 0.6 : 1,
         zIndex: isDragging ? 10 : 'auto',
-        touchAction: 'manipulation',
+        touchAction: 'none',
       }
     : undefined;
 
