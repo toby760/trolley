@@ -331,7 +331,7 @@ export default function AddItemModal({
                           fontSize: 13, color: 'var(--green-400)',
                           fontWeight: 600, marginTop: 2
                         }}>
-                          Previously bought{s.price ? ` Â· $${s.price.toFixed(2)}` : ''}
+                          Previously bought{s.price ? ` ÃÂ· $${s.price.toFixed(2)}` : ''}
                         </div>
                       )}
                     </div>
@@ -400,7 +400,7 @@ export default function AddItemModal({
                 fontSize: 15, fontWeight: 600,
                 color: 'var(--green-400)', marginTop: 6
               }}>
-                Est. ${getEstimatedPrice(selectedName, store || 'aldi').toFixed(2)} ea${quantity > 1 ? ` \u00d7 ${quantity} = ${(getEstimatedPrice(selectedName, store || 'aldi') * quantity).toFixed(2)}` : ''}
+                Est. ${getEstimatedPrice(selectedName, store || 'aldi').toFixed(2)} ea{quantity > 1 ? ` \u00d7 ${quantity} = $${(getEstimatedPrice(selectedName, store || 'aldi') * quantity).toFixed(2)}` : ''}
               </div>
             </div>
           </div>
@@ -430,7 +430,7 @@ export default function AddItemModal({
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontFamily: 'Nunito, sans-serif'
                     }}
-                  >\u2212</button>
+                  >−</button>
                   <span style={{ fontSize: 24, fontWeight: 900, minWidth: 32, textAlign: 'center' }}>{quantity}</span>
                   <button
                     onClick={() => setQuantity(q => Math.min(99, q + 1))}
