@@ -20,7 +20,7 @@ export function useItems() {
       .select('*')
       .eq('household_id', household.id)
       .eq('week_id', currentWeek.id)
-      .order('created_at', { ascending: true });
+      .order('sort_order', { ascending: true }).order('created_at', { ascending: true });
     if (!error && data) setItems(data);
     setLoading(false);
   }, [household, currentWeek]);
@@ -116,7 +116,8 @@ export function useItems() {
         store,
         added_by: currentUser,
         estimated_price: null,
-        status: 'active'
+        status: 'active',
+        sort_order: Date.now()
       })
       .select()
       .single();
@@ -228,11 +229,38 @@ export function useItems() {
   const activeCount = items.filter(i => i.status === 'active').length;
   const doneCount = items.filter(i => i.status === 'done').length;
 
+  // Reorder items within a single store by writing new sort_order values
+  // in one bulk update. Optimistic UI: mutate local state first, then sync.
+  const reorderItem = async (store, orderedIds) => {
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) return;
+    // Optimistic local reorder
+    setItems(prev => {
+      const byId = new Map(prev.map(i => [i.id, i]));
+      const reordered = orderedIds.map((id, idx) => {
+        const it = byId.get(id);
+        return it ? { ...it, sort_order: idx + 1 } : null;
+      }).filter(Boolean);
+      const others = prev.filter(i => !orderedIds.includes(i.id));
+      return [...others, ...reordered];
+    });
+    // Persist: one UPDATE per id (Supabase has no bulk update by pk list)
+    const updates = orderedIds.map((id, idx) =>
+      supabase.from('items').update({ sort_order: idx + 1 }).eq('id', id)
+    );
+    const results = await Promise.all(updates);
+    const failed = results.filter(r => r.error);
+    if (failed.length > 0) {
+      console.error('reorderItem failed:', failed.map(r => r.error));
+      // Re-fetch to recover from partial failure
+      fetchItems();
+    }
+  };
+
   return {
     items, aldiItems, woolworthsItems, loading,
     aldiTotal, woolworthsTotal, combinedTotal,
     activeCount, doneCount, priceMemory,
-    addItem, toggleItem, deleteItem, updateItem,
+    addItem, toggleItem, deleteItem, updateItem, reorderItem,
     moveToWoolworths, getSuggestedStore, getEstimatedPrice,
     fetchItems, fetchPriceMemory
   };
