@@ -235,3 +235,34 @@ CREATE POLICY "Allow all on shop_trips" ON shop_trips FOR ALL USING (true) WITH 
 -- Add trip_id column to items
 ALTER TABLE items ADD COLUMN IF NOT EXISTS trip_id UUID REFERENCES shop_trips(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_items_trip ON items(trip_id);
+
+-- ==========================================
+-- 9. PRODUCT ALIASES (receipt reconciliation)
+-- ==========================================
+-- Maps a user's shopping-list item name (e.g. "oranges") to the receipt's
+-- product name (e.g. "NAVEL ORANGES 1KG") so autocomplete can suggest the
+-- real product next week with the actual shelf price.
+CREATE TABLE IF NOT EXISTS product_aliases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  alias TEXT NOT NULL,
+  receipt_name TEXT NOT NULL,
+  store TEXT,
+  last_price NUMERIC(8,2),
+  match_count INTEGER DEFAULT 1,
+  last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS product_aliases_unique
+  ON product_aliases (household_id, lower(alias), lower(receipt_name), store);
+CREATE INDEX IF NOT EXISTS product_aliases_household_idx ON product_aliases(household_id);
+ALTER TABLE product_aliases ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "product_aliases_read_all" ON product_aliases;
+CREATE POLICY "product_aliases_read_all" ON product_aliases FOR SELECT USING (true);
+DROP POLICY IF EXISTS "product_aliases_write_all" ON product_aliases;
+CREATE POLICY "product_aliases_write_all" ON product_aliases FOR ALL USING (true) WITH CHECK (true);
+
+-- Additional columns used by receipt reconciliation
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS trip_id UUID REFERENCES shop_trips(id) ON DELETE SET NULL;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS actual_price NUMERIC(8,2);
+ALTER TABLE items ADD COLUMN IF NOT EXISTS receipt_name TEXT;
